@@ -39,8 +39,9 @@ void draw_splash(volatile uint32_t *fb) {
     unsigned char *splash = get_uncompressed_splash();
     
     /* Set display background color. */
+	uint32_t bg_color = splash[2] | splash[1] << 8 | splash[0] << 16;
     for (size_t i = 0; i < 1280 * 768; i++) {
-        fb[i] = 0x00A476;
+        fb[i] = bg_color;
     }
     
     /* Draw actual splash. */
