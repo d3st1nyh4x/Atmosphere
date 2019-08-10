@@ -40,7 +40,7 @@ void draw_splash(volatile uint32_t *fb) {
     
     /* Set display background color. */
     for (size_t i = 0; i < 1280 * 768; i++) {
-        fb[i] = 0x76A400;
+        fb[i] = 0x00A476;
     }
     
     /* Draw actual splash. */
