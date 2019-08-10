@@ -207,7 +207,7 @@ namespace sts::fatal::srv {
 
             /* Draw a background. */
             for (size_t i = 0; i < this->fb.fb_size / sizeof(*tiled_buf); i++) {
-                tiled_buf[i] = 0x39C9;
+                tiled_buf[i] = AtmosphereLogoData[0];
             }
 
             /* Draw the atmosphere logo in the bottom right corner. */
