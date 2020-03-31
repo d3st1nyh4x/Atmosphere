@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,12 +13,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <stratosphere/reg.hpp>
-
 #include "pinmux_utils.hpp"
 
-namespace sts::pinmux {
+namespace ams::pinmux {
 
     namespace {
 
@@ -33,24 +30,18 @@ namespace sts::pinmux {
 
         /* Helpers. */
         inline const Definition *GetDefinition(u32 pinmux_name) {
-            if (pinmux_name >= PadNameMax) {
-                std::abort();
-            }
-
+            AMS_ABORT_UNLESS(pinmux_name < PadNameMax);
             return &Map[pinmux_name];
         }
 
-        inline const DrivePadDefinition *GetDrivePadDefinition(u32 pinmux_name) {
-            if (pinmux_name >= DrivePadNameMax) {
-                std::abort();
-            }
-
-            return &DrivePadMap[pinmux_name];
+        inline const DrivePadDefinition *GetDrivePadDefinition(u32 drivepad_name) {
+            AMS_ABORT_UNLESS(drivepad_name < DrivePadNameMax);
+            return &DrivePadMap[drivepad_name];
         }
 
         uintptr_t GetBaseAddress() {
             if (!g_initialized_pinmux_vaddr) {
-                g_pinmux_vaddr = GetIoMapping(ApbMiscPhysicalBase, 0x4000);
+                g_pinmux_vaddr = dd::GetIoMapping(ApbMiscPhysicalBase, 0x4000);
                 g_initialized_pinmux_vaddr = true;
             }
             return g_pinmux_vaddr;
@@ -110,9 +101,7 @@ namespace sts::pinmux {
         u32 pinmux_val = reg::Read(pinmux_reg);
 
         /* This PINMUX register is locked */
-        if (pinmux_val & 0x80) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS((pinmux_val & 0x80) == 0);
 
         u32 pm_val = (pinmux_config_val & 0x07);
 

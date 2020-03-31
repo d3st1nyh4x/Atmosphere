@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -15,11 +15,9 @@
  */
 
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/ro.hpp>
 
-namespace sts::ro::impl {
+namespace ams::ro::impl {
 
     /* Definitions. */
     constexpr size_t InvalidContextId = static_cast<size_t>(-1);
@@ -32,8 +30,8 @@ namespace sts::ro::impl {
     bool ShouldEaseNroRestriction();
 
     /* Context utilities. */
-    Result RegisterProcess(size_t *out_context_id, Handle process_handle, u64 process_id);
-    Result ValidateProcess(size_t context_id, u64 process_id);
+    Result RegisterProcess(size_t *out_context_id, Handle process_handle, os::ProcessId process_id);
+    Result ValidateProcess(size_t context_id, os::ProcessId process_id);
     void   UnregisterProcess(size_t context_id);
 
     /* Service implementations. */
@@ -43,6 +41,6 @@ namespace sts::ro::impl {
     Result UnloadNro(size_t context_id, u64 nro_address);
 
     /* Debug service implementations. */
-    Result GetProcessModuleInfo(u32 *out_count, LoaderModuleInfo *out_infos, size_t max_out_count, u64 process_id);
+    Result GetProcessModuleInfo(u32 *out_count, LoaderModuleInfo *out_infos, size_t max_out_count, os::ProcessId process_id);
 
 }

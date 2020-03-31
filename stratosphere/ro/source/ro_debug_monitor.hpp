@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,24 +13,22 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
 
-namespace sts::ro {
+namespace ams::ro {
 
-    class DebugMonitorService final : public IServiceObject {
+    class DebugMonitorService final : public sf::IServiceObject {
         protected:
             enum class CommandId {
                 GetProcessModuleInfo = 0,
             };
         private:
             /* Actual commands. */
-            Result GetProcessModuleInfo(Out<u32> count, OutBuffer<LoaderModuleInfo> out_infos, u64 pid);
+            Result GetProcessModuleInfo(sf::Out<u32> out_count, const sf::OutArray<LoaderModuleInfo> &out_infos, os::ProcessId process_id);
         public:
             DEFINE_SERVICE_DISPATCH_TABLE {
-                MAKE_SERVICE_COMMAND_META(DebugMonitorService, GetProcessModuleInfo),
+                MAKE_SERVICE_COMMAND_META(GetProcessModuleInfo),
             };
     };
 

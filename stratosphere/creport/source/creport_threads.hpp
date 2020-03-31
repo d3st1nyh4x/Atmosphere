@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,13 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <map>
+#include "creport_scoped_file.hpp"
 
-namespace sts::creport {
+namespace ams::creport {
 
     /* Forward declare ModuleList class. */
     class ModuleList;
@@ -79,8 +77,8 @@ namespace sts::creport {
             }
 
             bool ReadFromProcess(Handle debug_handle, std::map<u64, u64> &tls_map, u64 thread_id, bool is_64_bit);
-            void SaveToFile(FILE *f_report);
-            void DumpBinary(FILE *f_bin);
+            void SaveToFile(ScopedFile &file);
+            void DumpBinary(ScopedFile &file);
         private:
             void TryGetStackInfo(Handle debug_handle);
     };
@@ -107,8 +105,8 @@ namespace sts::creport {
             }
 
             void ReadFromProcess(Handle debug_handle, std::map<u64, u64> &tls_map, bool is_64_bit);
-            void SaveToFile(FILE *f_report);
-            void DumpBinary(FILE *f_bin, u64 crashed_thread_id);
+            void SaveToFile(ScopedFile &file);
+            void DumpBinary(ScopedFile &file, u64 crashed_thread_id);
     };
 
 }

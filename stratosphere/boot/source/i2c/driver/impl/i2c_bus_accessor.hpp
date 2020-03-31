@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,15 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c_driver_types.hpp"
 #include "i2c_registers.hpp"
 
-namespace sts::i2c::driver::impl {
+namespace ams::i2c::driver::impl {
 
     class BusAccessor {
         private:
@@ -31,9 +27,9 @@ namespace sts::i2c::driver::impl {
             };
             static constexpr u64 InterruptTimeout = 100'000'000ul;
         private:
-            Event interrupt_event;
-            HosMutex open_mutex;
-            HosMutex register_mutex;
+            os::InterruptEvent interrupt_event;
+            os::Mutex open_mutex;
+            os::Mutex register_mutex;
             Registers *i2c_registers = nullptr;
             ClkRstRegisters clkrst_registers;
             SpeedMode speed_mode = SpeedMode::Fast;

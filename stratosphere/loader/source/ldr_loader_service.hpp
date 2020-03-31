@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,33 +13,28 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/ldr.hpp>
 
-namespace sts::ldr {
+namespace ams::ldr {
 
-    class LoaderService : public IServiceObject {
+    class LoaderService : public sf::IServiceObject {
         protected:
             /* Official commands. */
-            virtual Result CreateProcess(Out<MovedHandle> proc_h, PinId id, u32 flags, CopiedHandle reslimit_h);
-            virtual Result GetProgramInfo(OutPointerWithServerSize<ProgramInfo, 0x1> out_program_info, ncm::TitleLocation loc);
-            virtual Result PinTitle(Out<PinId> out_id, ncm::TitleLocation loc);
-            virtual Result UnpinTitle(PinId id);
-            virtual Result SetTitleArguments(ncm::TitleId title_id, InPointer<char> args, u32 args_size);
-            virtual Result ClearArguments();
-            virtual Result GetProcessModuleInfo(Out<u32> count, OutPointerWithClientSize<ModuleInfo> out, u64 process_id);
+            virtual Result CreateProcess(sf::OutMoveHandle proc_h, PinId id, u32 flags, sf::CopyHandle reslimit_h);
+            virtual Result GetProgramInfo(sf::Out<ProgramInfo> out_program_info, const ncm::ProgramLocation &loc);
+            virtual Result PinProgram(sf::Out<PinId> out_id, const ncm::ProgramLocation &loc);
+            virtual Result UnpinProgram(PinId id);
+            virtual Result SetProgramArguments(ncm::ProgramId program_id, const sf::InPointerBuffer &args, u32 args_size);
+            virtual Result FlushArguments();
+            virtual Result GetProcessModuleInfo(sf::Out<u32> count, const sf::OutPointerArray<ModuleInfo> &out, os::ProcessId process_id);
 
             /* Atmosphere commands. */
-            virtual Result AtmosphereSetExternalContentSource(Out<MovedHandle> out, ncm::TitleId title_id);
-            virtual void   AtmosphereClearExternalContentSource(ncm::TitleId title_id);
-            virtual void   AtmosphereHasLaunchedTitle(Out<bool> out, ncm::TitleId title_id);
-        public:
-            DEFINE_SERVICE_DISPATCH_TABLE {
-                /* No commands callable, as LoaderService is abstract. */
-            };
+            virtual Result AtmosphereRegisterExternalCode(sf::OutMoveHandle out, ncm::ProgramId program_id);
+            virtual void   AtmosphereUnregisterExternalCode(ncm::ProgramId program_id);
+            virtual void   AtmosphereHasLaunchedProgram(sf::Out<bool> out, ncm::ProgramId program_id);
+            virtual Result AtmosphereGetProgramInfo(sf::Out<ProgramInfo> out_program_info, sf::Out<cfg::OverrideStatus> out_status, const ncm::ProgramLocation &loc);
+            virtual Result AtmospherePinProgram(sf::Out<PinId> out_id, const ncm::ProgramLocation &loc, const cfg::OverrideStatus &override_status);
     };
 
     namespace pm {
@@ -49,19 +44,23 @@ namespace sts::ldr {
                 enum class CommandId {
                     CreateProcess   = 0,
                     GetProgramInfo  = 1,
-                    PinTitle        = 2,
-                    UnpinTitle      = 3,
+                    PinProgram      = 2,
+                    UnpinProgram    = 3,
 
-                    AtmosphereHasLaunchedTitle = 65000,
+                    AtmosphereHasLaunchedProgram = 65000,
+                    AtmosphereGetProgramInfo     = 65001,
+                    AtmospherePinProgram         = 65002,
                 };
             public:
                 DEFINE_SERVICE_DISPATCH_TABLE {
-                    MAKE_SERVICE_COMMAND_META(ProcessManagerInterface, CreateProcess),
-                    MAKE_SERVICE_COMMAND_META(ProcessManagerInterface, GetProgramInfo),
-                    MAKE_SERVICE_COMMAND_META(ProcessManagerInterface, PinTitle),
-                    MAKE_SERVICE_COMMAND_META(ProcessManagerInterface, UnpinTitle),
+                    MAKE_SERVICE_COMMAND_META(CreateProcess),
+                    MAKE_SERVICE_COMMAND_META(GetProgramInfo),
+                    MAKE_SERVICE_COMMAND_META(PinProgram),
+                    MAKE_SERVICE_COMMAND_META(UnpinProgram),
 
-                    MAKE_SERVICE_COMMAND_META(ProcessManagerInterface, AtmosphereHasLaunchedTitle),
+                    MAKE_SERVICE_COMMAND_META(AtmosphereHasLaunchedProgram),
+                    MAKE_SERVICE_COMMAND_META(AtmosphereGetProgramInfo),
+                    MAKE_SERVICE_COMMAND_META(AtmospherePinProgram),
                 };
         };
 
@@ -72,19 +71,19 @@ namespace sts::ldr {
         class DebugMonitorInterface final : public LoaderService {
             protected:
                 enum class CommandId {
-                    SetTitleArguments    = 0,
-                    ClearArguments       = 1,
+                    SetProgramArguments  = 0,
+                    FlushArguments       = 1,
                     GetProcessModuleInfo = 2,
 
-                    AtmosphereHasLaunchedTitle = 65000,
+                    AtmosphereHasLaunchedProgram = 65000,
                 };
             public:
                 DEFINE_SERVICE_DISPATCH_TABLE {
-                    MAKE_SERVICE_COMMAND_META(DebugMonitorInterface, SetTitleArguments),
-                    MAKE_SERVICE_COMMAND_META(DebugMonitorInterface, ClearArguments),
-                    MAKE_SERVICE_COMMAND_META(DebugMonitorInterface, GetProcessModuleInfo),
+                    MAKE_SERVICE_COMMAND_META(SetProgramArguments),
+                    MAKE_SERVICE_COMMAND_META(FlushArguments),
+                    MAKE_SERVICE_COMMAND_META(GetProcessModuleInfo),
 
-                    MAKE_SERVICE_COMMAND_META(DebugMonitorInterface, AtmosphereHasLaunchedTitle),
+                    MAKE_SERVICE_COMMAND_META(AtmosphereHasLaunchedProgram),
                 };
         };
 
@@ -95,19 +94,19 @@ namespace sts::ldr {
         class ShellInterface final : public LoaderService {
             protected:
                 enum class CommandId {
-                    SetTitleArguments    = 0,
-                    ClearArguments       = 1,
+                    SetProgramArguments  = 0,
+                    FlushArguments       = 1,
 
-                    AtmosphereSetExternalContentSource   = 65000,
-                    AtmosphereClearExternalContentSource = 65001,
+                    AtmosphereRegisterExternalCode   = 65000,
+                    AtmosphereUnregisterExternalCode = 65001,
                 };
             public:
                 DEFINE_SERVICE_DISPATCH_TABLE {
-                    MAKE_SERVICE_COMMAND_META(ShellInterface, SetTitleArguments),
-                    MAKE_SERVICE_COMMAND_META(ShellInterface, ClearArguments),
+                    MAKE_SERVICE_COMMAND_META(SetProgramArguments),
+                    MAKE_SERVICE_COMMAND_META(FlushArguments),
 
-                    MAKE_SERVICE_COMMAND_META(ShellInterface, AtmosphereSetExternalContentSource),
-                    MAKE_SERVICE_COMMAND_META(ShellInterface, AtmosphereClearExternalContentSource),
+                    MAKE_SERVICE_COMMAND_META(AtmosphereRegisterExternalCode),
+                    MAKE_SERVICE_COMMAND_META(AtmosphereUnregisterExternalCode),
                 };
         };
 

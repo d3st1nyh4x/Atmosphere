@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,7 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "fatal_config.hpp"
 #include "fatal_debug.hpp"
 #include "fatal_service.hpp"
@@ -21,7 +20,7 @@
 #include "fatal_event_manager.hpp"
 #include "fatal_task.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
     namespace {
 
@@ -33,17 +32,15 @@ namespace sts::fatal::srv {
                 bool has_thrown;
             private:
                 Result TrySetHasThrown() {
-                    if (this->has_thrown) {
-                        return ResultFatalAlreadyThrown;
-                    }
+                    R_UNLESS(!this->has_thrown, ResultAlreadyThrown());
                     this->has_thrown = true;
-                    return ResultSuccess;
+                    return ResultSuccess();
                 }
             public:
                 ServiceContext() {
                     this->context.ClearState();
-                    R_ASSERT(eventCreate(&this->context.erpt_event, false));
-                    R_ASSERT(eventCreate(&this->context.battery_event, false));
+                    R_ABORT_UNLESS(eventCreate(&this->context.erpt_event, false));
+                    R_ABORT_UNLESS(eventCreate(&this->context.battery_event, false));
                     this->has_thrown = false;
                 }
 
@@ -51,32 +48,30 @@ namespace sts::fatal::srv {
                     return this->event_manager.GetEvent(out);
                 }
 
-                Result ThrowFatal(u32 error_code, u64 process_id) {
-                    return this->ThrowFatalWithCpuContext(error_code, process_id, FatalType_ErrorReportAndErrorScreen, {});
+                Result ThrowFatal(Result result, os::ProcessId process_id) {
+                    return this->ThrowFatalWithCpuContext(result, process_id, FatalPolicy_ErrorReportAndErrorScreen, {});
                 }
 
-                Result ThrowFatalWithPolicy(u32 error_code, u64 process_id, FatalType policy) {
-                    return this->ThrowFatalWithCpuContext(error_code, process_id, policy, {});
+                Result ThrowFatalWithPolicy(Result result, os::ProcessId process_id, FatalPolicy policy) {
+                    return this->ThrowFatalWithCpuContext(result, process_id, policy, {});
                 }
 
-                Result ThrowFatalWithCpuContext(u32 error_code, u64 process_id, FatalType policy, const CpuContext &cpu_ctx);
+                Result ThrowFatalWithCpuContext(Result result, os::ProcessId process_id, FatalPolicy policy, const CpuContext &cpu_ctx);
         };
 
         /* Context global. */
         ServiceContext g_context;
 
         /* Throw implementation. */
-        Result ServiceContext::ThrowFatalWithCpuContext(u32 error_code, u64 process_id, FatalType policy, const CpuContext &cpu_ctx) {
-            /* We don't support Error Report only fatals. */
-            if (policy == FatalType_ErrorReport) {
-                return ResultSuccess;
-            }
+        Result ServiceContext::ThrowFatalWithCpuContext(Result result, os::ProcessId process_id, FatalPolicy policy, const CpuContext &cpu_ctx) {
+            /* We don't support Error-Report-only fatals. */
+            R_SUCCEED_IF(policy == FatalPolicy_ErrorReport);
 
             /* Note that we've thrown fatal. */
             R_TRY(this->TrySetHasThrown());
 
             /* At this point we have exclusive access to this->context. */
-            this->context.error_code = error_code;
+            this->context.result = result;
             this->context.cpu_ctx = cpu_ctx;
 
             /* Cap the stack trace to a sane limit. */
@@ -86,35 +81,35 @@ namespace sts::fatal::srv {
                 this->context.cpu_ctx.aarch32_ctx.stack_trace_size = std::max(size_t(this->context.cpu_ctx.aarch32_ctx.stack_trace_size), aarch32::CpuContext::MaxStackTraceDepth);
             }
 
-            /* Get title id. */
-            pm::info::GetTitleId(&this->context.title_id, process_id);
-            this->context.is_creport = (this->context.title_id == ncm::TitleId::Creport);
+            /* Get program id. */
+            pm::info::GetProgramId(&this->context.program_id, process_id);
+            this->context.is_creport = (this->context.program_id == ncm::SystemProgramId::Creport);
 
             if (!this->context.is_creport) {
                 /* On firmware version 2.0.0, use debugging SVCs to collect information. */
-                if (GetRuntimeFirmwareVersion() >= FirmwareVersion_200) {
+                if (hos::GetVersion() >= hos::Version_200) {
                     fatal::srv::TryCollectDebugInformation(&this->context, process_id);
                 }
             } else {
-                /* We received info from creport. Parse title id from afsr0. */
+                /* We received info from creport. Parse program id from afsr0. */
                 if (cpu_ctx.architecture == CpuContext::Architecture_Aarch64) {
-                    this->context.title_id = cpu_ctx.aarch64_ctx.GetTitleIdForAtmosphere();
+                    this->context.program_id = cpu_ctx.aarch64_ctx.GetProgramIdForAtmosphere();
                 } else {
-                    this->context.title_id = cpu_ctx.aarch32_ctx.GetTitleIdForAtmosphere();
+                    this->context.program_id = cpu_ctx.aarch32_ctx.GetProgramIdForAtmosphere();
                 }
             }
 
             /* Decide whether to generate a report. */
-            this->context.generate_error_report = (policy == FatalType_ErrorReportAndErrorScreen);
+            this->context.generate_error_report = (policy == FatalPolicy_ErrorReportAndErrorScreen);
 
             /* Adjust error code (2000-0000 -> 2162-0002). */
-            if (this->context.error_code == ResultSuccess) {
-                this->context.error_code = ResultErrSystemModuleAborted;
+            if (R_SUCCEEDED(this->context.result)) {
+                this->context.result = err::ResultSystemModuleAborted();
             }
 
             switch (policy) {
-                case FatalType_ErrorReportAndErrorScreen:
-                case FatalType_ErrorScreen:
+                case FatalPolicy_ErrorReportAndErrorScreen:
+                case FatalPolicy_ErrorScreen:
                     /* Signal that we're throwing. */
                     this->event_manager.SignalEvents();
 
@@ -122,39 +117,32 @@ namespace sts::fatal::srv {
                         RunTasks(&this->context);
                     }
                     break;
-                default:
-                    /* N aborts here. Should we just return an error code? */
-                    std::abort();
+                /* N aborts here. Should we just return an error code? */
+                AMS_UNREACHABLE_DEFAULT_CASE();
             }
 
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
     }
 
-    Result ThrowFatalForSelf(Result error_code) {
-        u64 process_id = 0;
-        R_ASSERT(svcGetProcessId(&process_id, CUR_PROCESS_HANDLE));
-        return g_context.ThrowFatalWithPolicy(static_cast<u32>(error_code), process_id, FatalType_ErrorScreen);
+    Result ThrowFatalForSelf(Result result) {
+        return g_context.ThrowFatalWithPolicy(result, os::GetCurrentProcessId(), FatalPolicy_ErrorScreen);
     }
 
-    Result UserService::ThrowFatal(u32 error, PidDescriptor pid_desc) {
-        return g_context.ThrowFatal(error, pid_desc.pid);
+    Result UserService::ThrowFatal(Result result, const sf::ClientProcessId &client_pid) {
+        return g_context.ThrowFatal(result, client_pid.GetValue());
     }
 
-    Result UserService::ThrowFatalWithPolicy(u32 error, PidDescriptor pid_desc, FatalType policy) {
-        return g_context.ThrowFatalWithPolicy(error, pid_desc.pid, policy);
+    Result UserService::ThrowFatalWithPolicy(Result result, const sf::ClientProcessId &client_pid, FatalPolicy policy) {
+        return g_context.ThrowFatalWithPolicy(result, client_pid.GetValue(), policy);
     }
 
-    Result UserService::ThrowFatalWithCpuContext(u32 error, PidDescriptor pid_desc, FatalType policy, InBuffer<u8> _ctx) {
-        if (_ctx.num_elements < sizeof(CpuContext)) {
-            return g_context.ThrowFatalWithPolicy(error, pid_desc.pid, policy);
-        } else {
-            return g_context.ThrowFatalWithCpuContext(error, pid_desc.pid, policy, *reinterpret_cast<const CpuContext *>(_ctx.buffer));
-        }
+    Result UserService::ThrowFatalWithCpuContext(Result result, const sf::ClientProcessId &client_pid, FatalPolicy policy, const CpuContext &cpu_ctx) {
+        return g_context.ThrowFatalWithCpuContext(result, client_pid.GetValue(), policy, cpu_ctx);
     }
 
-    Result PrivateService::GetFatalEvent(Out<CopiedHandle> out_h) {
+    Result PrivateService::GetFatalEvent(sf::OutCopyHandle out_h) {
         return g_context.GetEvent(out_h.GetHandlePointer());
     }
 

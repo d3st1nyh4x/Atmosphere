@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,14 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c_types.hpp"
 #include "i2c_command_list.hpp"
 
-namespace sts::i2c {
+namespace ams::i2c {
 
     namespace {
 
@@ -32,10 +28,8 @@ namespace sts::i2c {
     }
 
     Result CommandListFormatter::CanEnqueue(size_t size) const {
-        if (this->cmd_list_size - this->cur_index < size) {
-            return ResultI2cFullCommandList;
-        }
-        return ResultSuccess;
+        R_UNLESS(this->cmd_list_size - this->cur_index >= size, ResultFullCommandList());
+        return ResultSuccess();
     }
 
     Result CommandListFormatter::EnqueueSendCommand(I2cTransactionOption option, const void *src, size_t size) {
@@ -52,7 +46,7 @@ namespace sts::i2c {
         for (size_t i = 0; i < size; i++) {
             this->cmd_list[this->cur_index++] = src_u8[i];
         }
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result CommandListFormatter::EnqueueReceiveCommand(I2cTransactionOption option, size_t size) {
@@ -64,7 +58,7 @@ namespace sts::i2c {
         this->cur_index++;
 
         this->cmd_list[this->cur_index++] = size;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result CommandListFormatter::EnqueueSleepCommand(size_t us) {
@@ -75,7 +69,7 @@ namespace sts::i2c {
         this->cur_index++;
 
         this->cmd_list[this->cur_index++] = us;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
 }

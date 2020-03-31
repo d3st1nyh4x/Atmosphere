@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,10 +13,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "fatal_config.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
     namespace {
 
@@ -24,20 +23,29 @@ namespace sts::fatal::srv {
         FatalConfig g_config;
 
         /* Event creator. */
-        IEvent *CreateFatalDirtyEvent() {
+        Handle GetFatalDirtyEventReadableHandle() {
             Event evt;
-            R_ASSERT(setsysBindFatalDirtyFlagEvent(&evt));
-            return LoadReadOnlySystemEvent(evt.revent, [](u64 timeout) {
-                u64 flags_0, flags_1;
-                if (R_SUCCEEDED(setsysGetFatalDirtyFlags(&flags_0, &flags_1)) && (flags_0 & 1)) {
-                    g_config.UpdateLanguageCode();
-                }
-                return ResultSuccess;
-            }, true);
+            R_ABORT_UNLESS(setsysAcquireFatalDirtyFlagEventHandle(&evt));
+            return evt.revent;
         }
 
         /* Global event. */
-        IEvent *g_fatal_dirty_event = CreateFatalDirtyEvent();
+        os::SystemEvent g_fatal_dirty_event(GetFatalDirtyEventReadableHandle(), true, false);
+        os::WaitableHolder g_fatal_dirty_waitable_holder(&g_fatal_dirty_event);
+
+    }
+
+    os::WaitableHolder *GetFatalDirtyWaitableHolder() {
+        return &g_fatal_dirty_waitable_holder;
+    }
+
+    void OnFatalDirtyEvent() {
+        g_fatal_dirty_event.Reset();
+
+        u64 flags_0, flags_1;
+        if (R_SUCCEEDED(setsysGetFatalDirtyFlags(&flags_0, &flags_1)) && (flags_0 & 1)) {
+            g_config.UpdateLanguageCode();
+        }
     }
 
     FatalConfig::FatalConfig() {
@@ -47,16 +55,16 @@ namespace sts::fatal::srv {
         /* Get information from set. */
         setsysGetSerialNumber(this->serial_number);
         setsysGetFirmwareVersion(&this->firmware_version);
-        setsysGetFlag(SetSysFlag_Quest, &this->quest_flag);
+        setsysGetQuestFlag(&this->quest_flag);
         this->UpdateLanguageCode();
 
         /* Read information from settings. */
-        setsysGetSettingsItemValue("fatal", "transition_to_fatal", &this->transition_to_fatal, sizeof(this->transition_to_fatal));
-        setsysGetSettingsItemValue("fatal", "show_extra_info", &this->show_extra_info, sizeof(this->show_extra_info));
-        setsysGetSettingsItemValue("fatal", "quest_reboot_interval_second", &this->quest_reboot_interval_second, sizeof(this->quest_reboot_interval_second));
+        settings::fwdbg::GetSettingsItemValue(&this->transition_to_fatal, sizeof(this->transition_to_fatal), "fatal", "transition_to_fatal");
+        settings::fwdbg::GetSettingsItemValue(&this->show_extra_info, sizeof(this->show_extra_info), "fatal", "show_extra_info");
+        settings::fwdbg::GetSettingsItemValue(&this->quest_reboot_interval_second, sizeof(this->quest_reboot_interval_second), "fatal", "quest_reboot_interval_second");
 
         /* Atmosphere extension for automatic reboot. */
-        if (R_SUCCEEDED(setsysGetSettingsItemValue("atmosphere", "fatal_auto_reboot_interval", &this->fatal_auto_reboot_interval, sizeof(this->fatal_auto_reboot_interval)))) {
+        if (settings::fwdbg::GetSettingsItemValue(&this->fatal_auto_reboot_interval, sizeof(this->fatal_auto_reboot_interval), "atmosphere", "fatal_auto_reboot_interval") == sizeof(this->fatal_auto_reboot_interval)) {
             this->fatal_auto_reboot_enabled = this->fatal_auto_reboot_interval != 0;
         }
 
@@ -82,10 +90,6 @@ namespace sts::fatal::srv {
             /* FsStorage message_storage; */
             /* TODO: if (R_SUCCEEDED(fsOpenDataStorageByDataId(0x010000000000081D, "fatal_msg"))) { ... } */
         }
-    }
-
-    IEvent *GetFatalDirtyEvent() {
-        return g_fatal_dirty_event;
     }
 
     const FatalConfig &GetFatalConfig() {

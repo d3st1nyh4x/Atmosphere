@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -20,170 +20,66 @@
 
 /* Command forwarders. */
 Result nsGetDocumentInterfaceFwd(Service* s, NsDocumentInterface* out) {
-    IpcCommand c;
-    ipcInitialize(&c);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-    } *raw;
-
-    raw = serviceIpcPrepareHeader(s, &c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 7999;
-
-    Result rc = serviceIpcDispatch(s);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-
-        struct {
-            u64 magic;
-            u64 result;
-        } *resp;
-
-        serviceIpcParse(s, &r, sizeof(*resp));
-        resp = r.Raw;
-
-        rc = resp->result;
-        if (R_SUCCEEDED(rc)) {
-            serviceCreateSubservice(&out->s, s, &r, 0);
-        }
-    }
-
-    return rc;
+    return serviceDispatch(s, 7999,
+        .out_num_objects = 1,
+        .out_objects = &out->s,
+    );
 }
 
-Result nsamGetApplicationContentPathFwd(Service* s, void* out, size_t out_size, u64 app_id, FsStorageId storage_id) {
-    IpcCommand c;
-    ipcInitialize(&c);
-    ipcAddRecvBuffer(&c, out, out_size, 0);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-        u8 storage_id;
+static Result _nsGetApplicationContentPath(Service *s, void* out, size_t out_size, u64 app_id, NcmContentType content_type) {
+    const struct {
+        u8 content_type;
         u64 app_id;
-    } *raw;
-
-    raw = serviceIpcPrepareHeader(s, &c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 21;
-    raw->storage_id = storage_id;
-    raw->app_id = app_id;
-
-    Result rc = serviceIpcDispatch(s);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-
-        struct {
-            u64 magic;
-            u64 result;
-        } *resp;
-
-        serviceIpcParse(s, &r, sizeof(*resp));
-        resp = r.Raw;
-
-        rc = resp->result;
-    }
-
-    return rc;
+    } in = { content_type, app_id };
+    return serviceDispatchIn(s, 21, in,
+        .buffer_attrs = { SfBufferAttr_HipcMapAlias | SfBufferAttr_Out },
+        .buffers = { { out, out_size } },
+    );
 }
 
-Result nsamResolveApplicationContentPathFwd(Service* s, u64 title_id, FsStorageId storage_id) {
-    IpcCommand c;
-    ipcInitialize(&c);
 
-    struct {
-        u64 magic;
-        u64 cmd_id;
-        u8 storage_id;
-        u64 title_id;
-    } *raw;
-
-    raw = serviceIpcPrepareHeader(s, &c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 23;
-    raw->storage_id = storage_id;
-    raw->title_id = title_id;
-
-    Result rc = serviceIpcDispatch(s);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-
-        struct {
-            u64 magic;
-            u64 result;
-        } *resp;
-
-        serviceIpcParse(s, &r, sizeof(*resp));
-        resp = r.Raw;
-
-        rc = resp->result;
-    }
-
-    return rc;
+static Result _nsResolveApplicationContentPath(Service* s, u64 app_id, NcmContentType content_type) {
+    const struct {
+        u8 content_type;
+        u64 app_id;
+    } in = { content_type, app_id };
+    return serviceDispatchIn(s, 23, in);
 }
 
-Result nsamGetRunningApplicationProgramIdFwd(Service* s, u64* out_tid, u64 app_id) {
+static Result _nsGetRunningApplicationProgramId(Service* s, u64* out_program_id, u64 app_id) {
     if (hosversionBefore(6, 0, 0)) {
         return MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
     }
+    return serviceDispatchInOut(s, 92, app_id, *out_program_id);
+}
 
-    IpcCommand c;
-    ipcInitialize(&c);
+/* Application Manager forwarders. */
+Result nsamGetApplicationContentPathFwd(Service* s, void* out, size_t out_size, u64 app_id, NcmContentType content_type) {
+    return _nsGetApplicationContentPath(s, out, out_size, app_id, content_type);
+}
 
-    struct {
-        u64 magic;
-        u64 cmd_id;
-        u64 app_id;
-    } *raw;
+Result nsamResolveApplicationContentPathFwd(Service* s, u64 app_id, NcmContentType content_type) {
+    return _nsResolveApplicationContentPath(s, app_id, content_type);
+}
 
-    raw = serviceIpcPrepareHeader(s, &c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 92;
-    raw->app_id = app_id;
-
-    Result rc = serviceIpcDispatch(s);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-
-        struct {
-            u64 magic;
-            u64 result;
-            u64 title_id;
-        } *resp;
-
-        serviceIpcParse(s, &r, sizeof(*resp));
-        resp = r.Raw;
-
-        rc = resp->result;
-        if (R_SUCCEEDED(rc)) {
-            if (out_tid) {
-                *out_tid = resp->title_id;
-            }
-        }
-    }
-
-    return rc;
+Result nsamGetRunningApplicationProgramIdFwd(Service* s, u64* out_program_id, u64 app_id) {
+    return _nsGetRunningApplicationProgramId(s, out_program_id, app_id);
 }
 
 /* Web forwarders */
-Result nswebGetApplicationContentPath(NsDocumentInterface* doc, void* out, size_t out_size, u64 app_id, FsStorageId storage_id) {
-    return nsamGetApplicationContentPathFwd(&doc->s, out, out_size, app_id, storage_id);
+Result nswebGetApplicationContentPath(NsDocumentInterface* doc, void* out, size_t out_size, u64 app_id, NcmContentType content_type) {
+    return _nsGetApplicationContentPath(&doc->s, out, out_size, app_id, content_type);
 }
 
-Result nswebResolveApplicationContentPath(NsDocumentInterface* doc, u64 title_id, FsStorageId storage_id) {
-    return nsamResolveApplicationContentPathFwd(&doc->s, title_id, storage_id);
+Result nswebResolveApplicationContentPath(NsDocumentInterface* doc, u64 app_id, NcmContentType content_type) {
+    return _nsResolveApplicationContentPath(&doc->s, app_id, content_type);
 }
 
-Result nswebGetRunningApplicationProgramId(NsDocumentInterface* doc, u64* out_tid, u64 app_id) {
-    return nsamGetRunningApplicationProgramIdFwd(&doc->s, out_tid, app_id);
+Result nswebGetRunningApplicationProgramId(NsDocumentInterface* doc, u64* out_program_id, u64 app_id) {
+    return _nsGetRunningApplicationProgramId(&doc->s, out_program_id, app_id);
 }
+
+void nsDocumentInterfaceClose(NsDocumentInterface* doc) {
+    serviceClose(&doc->s);
+}
+

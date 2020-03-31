@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,22 +13,21 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "fatal_repair.hpp"
 #include "fatal_service_for_self.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
     namespace {
 
         bool IsInRepair() {
             /* Before firmware 3.0.0, this wasn't implemented. */
-            if (GetRuntimeFirmwareVersion() < FirmwareVersion_300) {
+            if (hos::GetVersion() < hos::Version_300) {
                 return false;
             }
 
             bool in_repair;
-            return R_SUCCEEDED(setsysGetFlag(SetSysFlag_InRepairProcessEnable, &in_repair)) && in_repair;
+            return R_SUCCEEDED(setsysGetInRepairProcessEnableFlag(&in_repair)) && in_repair;
         }
 
         bool IsInRepairWithoutVolHeld() {
@@ -45,7 +44,7 @@ namespace sts::fatal::srv {
                 gpioPadSetDirection(&vol_btn, GpioDirection_Input);
 
                 /* Ensure that we're holding the volume button for a full second. */
-                TimeoutHelper timeout_helper(1'000'000'000ul);
+                os::TimeoutHelper timeout_helper(1'000'000'000ul);
                 while (!timeout_helper.TimedOut()) {
                     GpioValue val;
                     if (R_FAILED(gpioPadGetValue(&vol_btn, &val)) || val != GpioValue_Low) {
@@ -62,12 +61,12 @@ namespace sts::fatal::srv {
 
         bool NeedsRunTimeReviser() {
             /* Before firmware 5.0.0, this wasn't implemented. */
-            if (GetRuntimeFirmwareVersion() < FirmwareVersion_300) {
+            if (hos::GetVersion() < hos::Version_500) {
                 return false;
             }
 
             bool requires_time_reviser;
-            return R_SUCCEEDED(setsysGetFlag(SetSysFlag_RequiresRunRepairTimeReviser, &requires_time_reviser)) && requires_time_reviser;
+            return R_SUCCEEDED(setsysGetRequiresRunRepairTimeReviser(&requires_time_reviser)) && requires_time_reviser;
         }
 
         bool IsTimeReviserCartridgeInserted() {
@@ -95,7 +94,7 @@ namespace sts::fatal::srv {
             }
 
             /* Check that the gamecard is a repair tool. */
-            return (gc_attr & FsGameCardAttribute_Repair) == FsGameCardAttribute_Repair;
+            return (gc_attr & FsGameCardAttribute_RepairToolFlag);
         }
 
         bool IsInRepairWithoutTimeReviserCartridge() {
@@ -106,11 +105,11 @@ namespace sts::fatal::srv {
 
     void CheckRepairStatus() {
         if (IsInRepairWithoutVolHeld()) {
-            ThrowFatalForSelf(ResultFatalInRepairWithoutVolHeld);
+            ThrowFatalForSelf(ResultInRepairWithoutVolHeld());
         }
 
         if (IsInRepairWithoutTimeReviserCartridge()) {
-            ThrowFatalForSelf(ResultFatalInRepairWithoutTimeReviserCartridge);
+            ThrowFatalForSelf(ResultInRepairWithoutTimeReviserCartridge());
         }
     }
 

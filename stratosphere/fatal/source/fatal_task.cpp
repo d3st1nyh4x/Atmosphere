@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,9 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-
 #include "fatal_task.hpp"
 
 #include "fatal_task_error_report.hpp"
@@ -24,7 +21,7 @@
 #include "fatal_task_clock.hpp"
 #include "fatal_task_power.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
     namespace {
 
@@ -33,7 +30,7 @@ namespace sts::fatal::srv {
             private:
                 static constexpr int TaskThreadPriority = 15;
             private:
-                HosThread thread;
+                os::Thread thread;
             private:
                 static void RunTaskImpl(void *arg) {
                     ITask *task = reinterpret_cast<ITask *>(arg);
@@ -45,8 +42,8 @@ namespace sts::fatal::srv {
             public:
                 TaskThread() { /* ... */ }
                 void StartTask(ITask *task) {
-                    R_ASSERT(this->thread.Initialize(&RunTaskImpl, task, task->GetStackSize(), TaskThreadPriority));
-                    R_ASSERT(this->thread.Start());
+                    R_ABORT_UNLESS(this->thread.Initialize(&RunTaskImpl, task, task->GetStack(), task->GetStackSize(), TaskThreadPriority));
+                    R_ABORT_UNLESS(this->thread.Start());
                 }
         };
 
@@ -60,10 +57,7 @@ namespace sts::fatal::srv {
             public:
                 TaskManager() { /* ... */ }
                 void StartTask(ITask *task) {
-                    if (this->task_count >= MaxTasks) {
-                        std::abort();
-                    }
-
+                    AMS_ABORT_UNLESS(this->task_count < MaxTasks);
                     this->task_threads[this->task_count++].StartTask(task);
                 }
         };

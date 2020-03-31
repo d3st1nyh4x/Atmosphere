@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -15,11 +15,9 @@
  */
 
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/ro.hpp>
 
-namespace sts::ro::impl {
+namespace ams::ro::impl {
 
     /* Utilities for working with NROs. */
     Result MapNro(u64 *out_base_address, Handle process_handle, u64 nro_heap_address, u64 nro_heap_size, u64 bss_heap_address, u64 bss_heap_size);

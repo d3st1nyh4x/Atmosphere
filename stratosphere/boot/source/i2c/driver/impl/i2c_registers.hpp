@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,15 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
-#include <stratosphere.hpp>
-#include <stratosphere/reg.hpp>
-
 #include "i2c_driver_types.hpp"
 
-namespace sts::i2c::driver::impl {
+namespace ams::i2c::driver::impl {
 
     struct Registers {
         volatile u32 I2C_I2C_CNFG_0;
@@ -88,7 +83,7 @@ namespace sts::i2c::driver::impl {
                     12, 22, 3, 7, 15, 6
                 };
 
-                const uintptr_t registers = GetIoMapping(0x60006000ul, 0x1000);
+                const uintptr_t registers = dd::GetIoMapping(0x60006000ul, os::MemoryPageSize);
                 const size_t idx = ConvertToIndex(bus);
                 this->clk_src_reg = registers + s_clk_src_offsets[idx];
                 this->clk_en_reg  = registers + s_clk_en_offsets[idx];
@@ -102,7 +97,7 @@ namespace sts::i2c::driver::impl {
             0x0000, 0x0400, 0x0500, 0x0700, 0x1000, 0x1100
         };
 
-        const uintptr_t registers = GetIoMapping(0x7000c000ul, 0x2000) + s_offsets[ConvertToIndex(bus)];
+        const uintptr_t registers = dd::GetIoMapping(0x7000c000ul, 2 * os::MemoryPageSize) + s_offsets[ConvertToIndex(bus)];
         return reinterpret_cast<Registers *>(registers);
     }
 

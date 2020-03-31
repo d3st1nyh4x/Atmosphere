@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,14 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/ldr.hpp>
-#include <stratosphere/pm.hpp>
 
-namespace sts::pm::resource {
+namespace ams::pm::resource {
 
     /* Resource API. */
     Result InitializeResourceManager();
@@ -30,6 +26,6 @@ namespace sts::pm::resource {
     Handle GetResourceLimitHandle(const ldr::ProgramInfo *info);
     void   WaitResourceAvailable(const ldr::ProgramInfo *info);
 
-    Result GetResourceLimitValues(u64 *out_cur, u64 *out_lim, ResourceLimitGroup group, LimitableResource resource);
+    Result GetResourceLimitValues(s64 *out_cur, s64 *out_lim, ResourceLimitGroup group, svc::LimitableResource resource);
 
 }

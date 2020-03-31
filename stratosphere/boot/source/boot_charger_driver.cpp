@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,13 +13,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "boot_charger_driver.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     Result ChargerDriver::Read(u8 addr, u8 *out) {
         return ReadI2cRegister(this->i2c_session, reinterpret_cast<u8 *>(out), sizeof(*out), &addr, sizeof(addr));
@@ -35,7 +31,7 @@ namespace sts::boot {
 
         const u8 new_val = (cur_val & ~mask) | val;
         R_TRY(this->Write(addr, new_val));
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result ChargerDriver::Initialize() {
@@ -59,7 +55,7 @@ namespace sts::boot {
         R_TRY(this->SetBoostModeCurrentLimit(bq24193::BoostModeCurrentLimit_500mA));
         R_TRY(this->SetHiZEnabled(false));
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result ChargerDriver::SetChargeEnabled(bool enabled) {
@@ -123,14 +119,14 @@ namespace sts::boot {
         u8 limit;
         R_TRY(this->Read(bq24193::InputSourceControl, &limit));
         *out = static_cast<bq24193::InputCurrentLimit>(limit);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result ChargerDriver::GetChargeVoltageLimit(u32 *out) {
         u8 reg;
         R_TRY(this->Read(bq24193::ChargeVoltageControl, &reg));
         *out = bq24193::DecodeChargeVoltageLimit(reg);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
 }

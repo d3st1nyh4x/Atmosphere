@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,14 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <stratosphere/spl.hpp>
-
 #include "boot_boot_reason.hpp"
 #include "boot_pmic_driver.hpp"
 #include "boot_rtc_driver.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     namespace {
 
@@ -75,51 +72,36 @@ namespace sts::boot {
         /* Get values from PMIC. */
         {
             PmicDriver pmic_driver;
-            if (R_FAILED(pmic_driver.GetPowerIntr(&power_intr))) {
-                std::abort();
-            }
-            if (R_FAILED(pmic_driver.GetNvErc(&nv_erc))) {
-                std::abort();
-            }
-            if (R_FAILED(pmic_driver.GetAcOk(&ac_ok))) {
-                std::abort();
-            }
+            R_ABORT_UNLESS(pmic_driver.GetPowerIntr(&power_intr));
+            R_ABORT_UNLESS(pmic_driver.GetNvErc(&nv_erc));
+            R_ABORT_UNLESS(pmic_driver.GetAcOk(&ac_ok));
         }
 
         /* Get values from RTC. */
         {
             RtcDriver rtc_driver;
-            if (R_FAILED(rtc_driver.GetRtcIntr(&rtc_intr))) {
-                std::abort();
-            }
-            if (R_FAILED(rtc_driver.GetRtcIntrM(&rtc_intr_m))) {
-                std::abort();
-            }
+            R_ABORT_UNLESS(rtc_driver.GetRtcIntr(&rtc_intr));
+            R_ABORT_UNLESS(rtc_driver.GetRtcIntrM(&rtc_intr_m));
         }
 
         /* Set global derived boot reason. */
         g_boot_reason = MakeBootReason(power_intr, rtc_intr & ~rtc_intr_m, nv_erc, ac_ok);
 
         /* Set boot reason for SPL. */
-        if (GetRuntimeFirmwareVersion() >= FirmwareVersion_300) {
+        if (hos::GetVersion() >= hos::Version_300) {
             BootReasonValue boot_reason_value;
             boot_reason_value.power_intr = power_intr;
             boot_reason_value.rtc_intr = rtc_intr & ~rtc_intr_m;
             boot_reason_value.nv_erc = nv_erc;
             boot_reason_value.boot_reason = g_boot_reason;
-            if (R_FAILED(splSetBootReason(boot_reason_value.value))) {
-                std::abort();
-            }
+            R_ABORT_UNLESS(splSetBootReason(boot_reason_value.value));
         }
 
         g_detected_boot_reason = true;
     }
 
     u32 GetBootReason() {
-        if (!g_detected_boot_reason) {
-            std::abort();
-        }
-
+        AMS_ABORT_UNLESS(g_detected_boot_reason);
         return g_boot_reason;
     }
 

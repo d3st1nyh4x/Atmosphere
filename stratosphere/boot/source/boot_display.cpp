@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,11 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-
-#include <stratosphere/reg.hpp>
-#include <stratosphere/spl.hpp>
-
 #include "boot_display.hpp"
 #include "boot_i2c_utils.hpp"
 #include "boot_pmc_wrapper.hpp"
@@ -28,7 +23,7 @@
 #include "boot_registers_pinmux.hpp"
 #include "boot_registers_pmc.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     /* Display configuration included into anonymous namespace. */
     namespace {
@@ -47,18 +42,19 @@ namespace sts::boot {
         constexpr size_t FrameBufferHeight = 1280;
         constexpr size_t FrameBufferSize = FrameBufferHeight * FrameBufferWidth * sizeof(u32);
 
-        constexpr uintptr_t Disp1Base = 0x54200000ul;
-        constexpr uintptr_t DsiBase = 0x54300000ul;
-        constexpr uintptr_t ClkRstBase = 0x60006000ul;
-        constexpr uintptr_t GpioBase = 0x6000D000ul;
+        constexpr uintptr_t Disp1Base   = 0x54200000ul;
+        constexpr uintptr_t DsiBase     = 0x54300000ul;
+        constexpr uintptr_t ClkRstBase  = 0x60006000ul;
+        constexpr uintptr_t GpioBase    = 0x6000D000ul;
         constexpr uintptr_t ApbMiscBase = 0x70000000ul;
         constexpr uintptr_t MipiCalBase = 0x700E3000ul;
-        constexpr size_t Disp1Size = 0x3000;
-        constexpr size_t DsiSize = 0x1000;
-        constexpr size_t ClkRstSize = 0x1000;
-        constexpr size_t GpioSize = 0x1000;
-        constexpr size_t ApbMiscSize = 0x1000;
-        constexpr size_t MipiCalSize = 0x1000;
+
+        constexpr size_t Disp1Size   = 3 * os::MemoryPageSize;
+        constexpr size_t DsiSize     =     os::MemoryPageSize;
+        constexpr size_t ClkRstSize  =     os::MemoryPageSize;
+        constexpr size_t GpioSize    =     os::MemoryPageSize;
+        constexpr size_t ApbMiscSize =     os::MemoryPageSize;
+        constexpr size_t MipiCalSize =     os::MemoryPageSize;
 
         /* Types. */
 
@@ -79,12 +75,12 @@ namespace sts::boot {
 
         /* Helper functions. */
         void InitializeRegisterBaseAddresses() {
-            g_disp1_regs    = GetIoMapping(Disp1Base, Disp1Size);
-            g_dsi_regs      = GetIoMapping(DsiBase, DsiSize);
-            g_clk_rst_regs  = GetIoMapping(ClkRstBase, ClkRstSize);
-            g_gpio_regs     = GetIoMapping(GpioBase, GpioSize);
-            g_apb_misc_regs = GetIoMapping(ApbMiscBase, ApbMiscSize);
-            g_mipi_cal_regs = GetIoMapping(MipiCalBase, MipiCalSize);
+            g_disp1_regs    = dd::GetIoMapping(Disp1Base, Disp1Size);
+            g_dsi_regs      = dd::GetIoMapping(DsiBase, DsiSize);
+            g_clk_rst_regs  = dd::GetIoMapping(ClkRstBase, ClkRstSize);
+            g_gpio_regs     = dd::GetIoMapping(GpioBase, GpioSize);
+            g_apb_misc_regs = dd::GetIoMapping(ApbMiscBase, ApbMiscSize);
+            g_mipi_cal_regs = dd::GetIoMapping(MipiCalBase, MipiCalSize);
         }
 
         inline void DoRegisterWrites(uintptr_t base_address, const RegisterWrite *reg_writes, size_t num_writes) {
@@ -103,12 +99,14 @@ namespace sts::boot {
 
         inline void DoDsiSleepOrRegisterWrites(const DsiSleepOrRegisterWrite *reg_writes, size_t num_writes) {
             for (size_t i = 0; i < num_writes; i++) {
-                if (reg_writes[i].kind == DsiSleepOrRegisterWriteKind_Write) {
-                    reg::Write(g_dsi_regs + sizeof(u32) * reg_writes[i].offset, reg_writes[i].value);
-                } else if (reg_writes[i].kind == DsiSleepOrRegisterWriteKind_Sleep) {
-                    svcSleepThread(1'000'000ul * u64(reg_writes[i].offset));
-                } else {
-                    std::abort();
+                switch (reg_writes[i].kind) {
+                    case DsiSleepOrRegisterWriteKind_Write:
+                        reg::Write(g_dsi_regs + sizeof(u32) * reg_writes[i].offset, reg_writes[i].value);
+                        break;
+                    case DsiSleepOrRegisterWriteKind_Sleep:
+                        svcSleepThread(1'000'000ul * u64(reg_writes[i].offset));
+                        break;
+                    AMS_UNREACHABLE_DEFAULT_CASE();
                 }
             }
         }
@@ -127,48 +125,33 @@ namespace sts::boot {
                 std::memset(g_frame_buffer, 0x00, FrameBufferSize);
                 armDCacheFlush(g_frame_buffer, FrameBufferSize);
 
-                constexpr u64 DeviceName_DC = 2;
-
                 /* Create Address Space. */
-                if (R_FAILED(svcCreateDeviceAddressSpace(&g_dc_das_hnd, 0, (1ul << 32)))) {
-                    std::abort();
-                }
+                R_ABORT_UNLESS(svcCreateDeviceAddressSpace(&g_dc_das_hnd, 0, (1ul << 32)));
                 /* Attach it to the DC. */
-                if (R_FAILED(svcAttachDeviceAddressSpace(DeviceName_DC, g_dc_das_hnd))) {
-                    std::abort();
-                }
+                R_ABORT_UNLESS(svcAttachDeviceAddressSpace(svc::DeviceName_Dc, g_dc_das_hnd));
 
                 /* Map the framebuffer for the DC as read-only. */
-                if (R_FAILED(svcMapDeviceAddressSpaceAligned(g_dc_das_hnd, CUR_PROCESS_HANDLE, frame_buffer_aligned, FrameBufferSize, FrameBufferPaddr, 1))) {
-                    std::abort();
-                }
+                R_ABORT_UNLESS(svcMapDeviceAddressSpaceAligned(g_dc_das_hnd, dd::GetCurrentProcessHandle(), frame_buffer_aligned, FrameBufferSize, FrameBufferPaddr, 1));
             }
         }
 
         void FinalizeFrameBuffer() {
             if (g_frame_buffer != nullptr) {
                 const uintptr_t frame_buffer_aligned = reinterpret_cast<uintptr_t>(g_frame_buffer);
-                constexpr u64 DeviceName_DC = 2;
 
                 /* Unmap the framebuffer from the DC. */
-                if (R_FAILED(svcUnmapDeviceAddressSpace(g_dc_das_hnd, CUR_PROCESS_HANDLE, frame_buffer_aligned, FrameBufferSize, FrameBufferPaddr))) {
-                    std::abort();
-                }
+                R_ABORT_UNLESS(svcUnmapDeviceAddressSpace(g_dc_das_hnd, dd::GetCurrentProcessHandle(), frame_buffer_aligned, FrameBufferSize, FrameBufferPaddr));
                 /* Detach address space from the DC. */
-                if (R_FAILED(svcDetachDeviceAddressSpace(DeviceName_DC, g_dc_das_hnd))) {
-                    std::abort();
-                }
+                R_ABORT_UNLESS(svcDetachDeviceAddressSpace(svc::DeviceName_Dc, g_dc_das_hnd));
                 /* Close the address space. */
-                if (R_FAILED(svcCloseHandle(g_dc_das_hnd))) {
-                    std::abort();
-                }
+                R_ABORT_UNLESS(svcCloseHandle(g_dc_das_hnd));
                 g_dc_das_hnd = INVALID_HANDLE;
                 g_frame_buffer = nullptr;
             }
         }
 
         void WaitDsiTrigger() {
-            TimeoutHelper timeout_helper(250'000'000ul);
+            os::TimeoutHelper timeout_helper(250'000'000ul);
 
             while (true) {
                 if (timeout_helper.TimedOut()) {
@@ -183,7 +166,7 @@ namespace sts::boot {
         }
 
         void WaitDsiHostControl() {
-            TimeoutHelper timeout_helper(150'000'000ul);
+            os::TimeoutHelper timeout_helper(150'000'000ul);
 
             while (true) {
                 if (timeout_helper.TimedOut()) {
@@ -300,8 +283,8 @@ namespace sts::boot {
             for (size_t i = 0; i < util::size(host_response); i++) {
                 host_response[i] = reg::Read(g_dsi_regs + sizeof(u32) * DSI_RD_DATA);
             }
-            
-            /* The last word from host response is: 
+
+            /* The last word from host response is:
                 Bits 0-7: FAB
                 Bits 8-15: REV
                 Bits 16-23: Minor REV
@@ -428,7 +411,7 @@ namespace sts::boot {
 
         /* Nintendo waits 5 frames before continuing. */
         {
-            const uintptr_t host1x_vaddr = GetIoMapping(0x500030a4, 4);
+            const uintptr_t host1x_vaddr = dd::GetIoMapping(0x500030a4, 4);
             const u32 start_val = reg::Read(host1x_vaddr);
             while (reg::Read(host1x_vaddr) < start_val + 5) {
                 /* spinlock here. */

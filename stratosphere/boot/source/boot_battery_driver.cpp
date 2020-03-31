@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,12 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "boot_battery_driver.hpp"
 #include "boot_calibration.hpp"
 #include "boot_i2c_utils.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     /* Include configuration into anonymous namespace. */
     namespace {
@@ -67,7 +66,7 @@ namespace sts::boot {
         const u16 new_val = (cur_val & ~mask) | val;
         R_TRY(this->Write(addr, new_val));
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     bool BatteryDriver::WriteValidate(u8 addr, u16 val) {
@@ -99,20 +98,20 @@ namespace sts::boot {
     Result BatteryDriver::LockModelTable() {
         R_TRY(this->Write(Max17050ModelAccess0, 0x0000));
         R_TRY(this->Write(Max17050ModelAccess1, 0x0000));
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::UnlockModelTable() {
         R_TRY(this->Write(Max17050ModelAccess0, 0x0059));
         R_TRY(this->Write(Max17050ModelAccess1, 0x00C4));
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::SetModelTable(const u16 *model_table) {
         for (size_t i = 0; i < Max17050ModelChrTblSize; i++) {
             R_TRY(this->Write(Max17050ModelChrTblStart + i, model_table[i]));
         }
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     bool BatteryDriver::IsModelTableLocked() {
@@ -173,7 +172,7 @@ namespace sts::boot {
 
                 if (lock_i >= 8) {
                     /* This is regarded as guaranteed success. */
-                    return ResultSuccess;
+                    return ResultSuccess();
                 }
             }
 
@@ -235,7 +234,7 @@ namespace sts::boot {
             R_TRY(this->Write(Max17050CGain, 0x7FFF));
         }
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::IsBatteryRemoved(bool *out) {
@@ -243,28 +242,28 @@ namespace sts::boot {
         u16 val = 0;
         R_TRY(this->Read(Max17050Status, &val));
         *out = (val & 0x0008) == 0x0008;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::GetTemperature(double *out) {
         u16 val = 0;
         R_TRY(this->Read(Max17050Temperature, &val));
         *out = static_cast<double>(val) * double(0.00390625);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::GetAverageVCell(u32 *out) {
         u16 val = 0;
         R_TRY(this->Read(Max17050AverageVCell, &val));
         *out = (625 * u32(val >> 3)) / 1000;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::GetSocRep(double *out) {
         u16 val = 0;
         R_TRY(this->Read(Max17050SocRep, &val));
         *out = static_cast<double>(val) * double(0.00390625);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::GetBatteryPercentage(size_t *out) {
@@ -278,7 +277,7 @@ namespace sts::boot {
         } else {
             *out = static_cast<size_t>(converted_percentage);
         }
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::SetShutdownTimer() {
@@ -289,7 +288,7 @@ namespace sts::boot {
         u16 val = 0;
         R_TRY(this->Read(Max17050Config, &val));
         *out = (val & 0x0040) != 0;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result BatteryDriver::SetShutdownEnabled(bool enabled) {

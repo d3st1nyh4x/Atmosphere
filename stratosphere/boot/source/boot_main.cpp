@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,17 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <cstdlib>
-#include <cstdint>
-#include <cstring>
-#include <malloc.h>
-
-#include <switch.h>
-#include <atmosphere.h>
-#include <stratosphere.hpp>
-#include <stratosphere/spl.hpp>
-
 #include "boot_boot_reason.hpp"
 #include "boot_change_voltage.hpp"
 #include "boot_check_battery.hpp"
@@ -39,14 +28,15 @@
 
 #include "boot_power_utils.hpp"
 
-using namespace sts;
+using namespace ams;
 
 extern "C" {
     extern u32 __start__;
 
     u32 __nx_applet_type = AppletType_None;
 
-    #define INNER_HEAP_SIZE 0x200000
+    /* TODO: Evaluate to what extent this can be reduced further. */
+    #define INNER_HEAP_SIZE 0x20000
     size_t nx_inner_heap_size = INNER_HEAP_SIZE;
     char   nx_inner_heap[INNER_HEAP_SIZE];
 
@@ -55,21 +45,32 @@ extern "C" {
     void __appExit(void);
 
     /* Exception handling. */
-    alignas(16) u8 __nx_exception_stack[0x1000];
+    alignas(16) u8 __nx_exception_stack[ams::os::MemoryPageSize];
     u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
     void __libnx_exception_handler(ThreadExceptionDump *ctx);
-    void __libstratosphere_exception_handler(AtmosphereFatalErrorContext *ctx);
 }
 
-sts::ncm::TitleId __stratosphere_title_id = sts::ncm::TitleId::Boot;
+namespace ams {
+
+    ncm::ProgramId CurrentProgramId = ncm::SystemProgramId::Boot;
+
+    void ExceptionHandler(FatalErrorContext *ctx) {
+        /* We're boot sysmodule, so manually reboot to fatal error. */
+        boot::RebootForFatalError(ctx);
+    }
+
+    namespace result {
+
+        bool CallFatalOnResultAssertion = false;
+
+    }
+
+}
+
+using namespace ams;
 
 void __libnx_exception_handler(ThreadExceptionDump *ctx) {
-    StratosphereCrashHandler(ctx);
-}
-
-void __libstratosphere_exception_handler(AtmosphereFatalErrorContext *ctx) {
-    /* We're boot sysmodule, so manually reboot to fatal error. */
-    boot::RebootForFatalError(ctx);
+    ams::CrashHandler(ctx);
 }
 
 void __libnx_initheap(void) {
@@ -85,21 +86,20 @@ void __libnx_initheap(void) {
 }
 
 void __appInit(void) {
-    SetFirmwareVersionForLibnx();
+    hos::SetVersionForLibnx();
 
     /* Initialize services we need (TODO: NCM) */
-    DoWithSmSession([&]() {
-        R_ASSERT(fsInitialize());
-        R_ASSERT(splInitialize());
-        R_ASSERT(pmshellInitialize());
+    sm::DoWithSession([&]() {
+        R_ABORT_UNLESS(fsInitialize());
+        R_ABORT_UNLESS(splInitialize());
+        R_ABORT_UNLESS(pmshellInitialize());
     });
 
-    CheckAtmosphereVersion(CURRENT_ATMOSPHERE_VERSION);
+    ams::CheckApiVersion();
 }
 
 void __appExit(void) {
     /* Cleanup services. */
-    fsdevUnmountAll();
     pmshellExit();
     splExit();
     fsExit();
@@ -120,7 +120,7 @@ int main(int argc, char **argv)
     boot::DetectBootReason();
 
     const auto hw_type = spl::GetHardwareType();
-    if (hw_type != spl::HardwareType::Copper) {
+    if (hw_type != spl::HardwareType::Copper && hw_type != spl::HardwareType::Calcio) {
         /* Display splash screen for two seconds. */
         boot::ShowSplashScreen();
 
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
     boot::SetInitialWakePinConfiguration();
 
     /* Configure output clock. */
-    if (hw_type != spl::HardwareType::Copper) {
+    if (hw_type != spl::HardwareType::Copper && hw_type != spl::HardwareType::Calcio) {
         boot::SetInitialClockConfiguration();
     }
 
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
     boot::CheckAndRepairBootImages();
 
     /* Tell PM to start boot2. */
-    R_ASSERT(pmshellNotifyBootFinished());
+    R_ABORT_UNLESS(pmshellNotifyBootFinished());
 
     return 0;
 }

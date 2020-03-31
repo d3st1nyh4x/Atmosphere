@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -653,7 +653,8 @@ int nxfs_mount_emummc_file(const char *emummc_path, int num_parts, uint64_t part
     is_exfat = (rc == 1);
     
     /* Reject single part in FAT32. */
-    if (!is_exfat && (num_parts <= 1)) {
+    /* NOTE: This check has no effect in the current design. */
+    if (!is_exfat && (num_parts < 1)) {
         return -2;
     }
     

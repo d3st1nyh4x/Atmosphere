@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,23 +13,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <cstdlib>
-#include <cstdint>
-#include <cstring>
-#include <malloc.h>
-
-#include <switch.h>
-#include <atmosphere.h>
-#include <stratosphere.hpp>
-
-#include "amsmitm_modules.hpp"
-#include "utils.hpp"
+#include "amsmitm_initialization.hpp"
+#include "amsmitm_module_management.hpp"
+#include "bpc_mitm/bpc_ams_power_utils.hpp"
 
 extern "C" {
     extern u32 __start__;
 
     u32 __nx_applet_type = AppletType_None;
+    u32 __nx_fs_num_sessions = 1;
 
     #define INNER_HEAP_SIZE 0x1000000
     size_t nx_inner_heap_size = INNER_HEAP_SIZE;
@@ -40,21 +32,33 @@ extern "C" {
     void __appExit(void);
 
     /* Exception handling. */
-    alignas(16) u8 __nx_exception_stack[0x1000];
+    alignas(16) u8 __nx_exception_stack[ams::os::MemoryPageSize];
     u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
     void __libnx_exception_handler(ThreadExceptionDump *ctx);
-    void __libstratosphere_exception_handler(AtmosphereFatalErrorContext *ctx);
 }
 
-sts::ncm::TitleId __stratosphere_title_id = sts::ncm::TitleId::AtmosphereMitm;
+namespace ams {
+
+    ncm::ProgramId CurrentProgramId = ncm::AtmosphereProgramId::Mitm;
+
+    namespace result {
+
+        bool CallFatalOnResultAssertion = false;
+
+    }
+
+    /* Override. */
+    void ExceptionHandler(FatalErrorContext *ctx) {
+        /* We're bpc-mitm (or ams_mitm, anyway), so manually reboot to fatal error. */
+        mitm::bpc::RebootForFatalError(ctx);
+    }
+
+}
+
+using namespace ams;
 
 void __libnx_exception_handler(ThreadExceptionDump *ctx) {
-    StratosphereCrashHandler(ctx);
-}
-
-void __libstratosphere_exception_handler(AtmosphereFatalErrorContext *ctx) {
-    /* We're bpc-mitm (or ams_mitm, anyway), so manually reboot to fatal error. */
-    Utils::RebootToFatalError(ctx);
+    ams::CrashHandler(ctx);
 }
 
 void __libnx_initheap(void) {
@@ -70,16 +74,16 @@ void __libnx_initheap(void) {
 }
 
 void __appInit(void) {
-    SetFirmwareVersionForLibnx();
+    hos::SetVersionForLibnx();
 
-    DoWithSmSession([&]() {
-        R_ASSERT(fsInitialize());
-        R_ASSERT(pmdmntInitialize());
-        R_ASSERT(pminfoInitialize());
-        R_ASSERT(splFsInitialize());
+    sm::DoWithSession([&]() {
+        R_ABORT_UNLESS(fsInitialize());
+        R_ABORT_UNLESS(pmdmntInitialize());
+        R_ABORT_UNLESS(pminfoInitialize());
+        R_ABORT_UNLESS(splFsInitialize());
     });
 
-    CheckAtmosphereVersion(CURRENT_ATMOSPHERE_VERSION);
+    ams::CheckApiVersion();
 }
 
 void __appExit(void) {
@@ -90,18 +94,15 @@ void __appExit(void) {
     fsExit();
 }
 
-int main(int argc, char **argv)
-{
-    consoleDebugInit(debugDevice_SVC);
-    HosThread initializer_thread;
+int main(int argc, char **argv) {
+    /* Start initialization (sd card init, automatic backups, etc) */
+    mitm::StartInitialize();
 
-    LaunchAllMitmModules();
-
-    R_ASSERT(initializer_thread.Initialize(&Utils::InitializeThreadFunc, NULL, 0x4000, 0x15));
-    R_ASSERT(initializer_thread.Start());
+    /* Launch all mitm modules in sequence. */
+    mitm::LaunchAllModules();
 
     /* Wait for all mitm modules to end. */
-    WaitAllMitmModules();
+    mitm::WaitAllModules();
 
     return 0;
 }

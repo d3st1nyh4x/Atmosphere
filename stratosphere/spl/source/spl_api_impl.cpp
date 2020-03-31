@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,22 +13,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-#include <stratosphere/spl.hpp>
-
 #include "spl_api_impl.hpp"
 
 #include "spl_ctr_drbg.hpp"
 
-namespace sts::spl::impl {
+namespace ams::spl::impl {
 
     namespace {
 
         /* Convenient defines. */
-        constexpr size_t DeviceAddressSpaceAlignSize = 0x400000;
-        constexpr size_t DeviceAddressSpaceAlignMask = DeviceAddressSpaceAlignSize - 1;
+        constexpr size_t DeviceAddressSpaceAlign = 0x400000;
         constexpr u32 WorkBufferMapBase  = 0x80000000u;
         constexpr u32 CryptAesInMapBase  = 0x90000000u;
         constexpr u32 CryptAesOutMapBase = 0xC0000000u;
@@ -45,7 +39,7 @@ namespace sts::spl::impl {
 
         /* Max Keyslots helper. */
         inline size_t GetMaxKeyslots() {
-            return (GetRuntimeFirmwareVersion() >= FirmwareVersion_600) ? MaxAesKeyslots : MaxAesKeyslotsDeprecated;
+            return (hos::GetVersion() >= hos::Version_600) ? MaxAesKeyslots : MaxAesKeyslotsDeprecated;
         }
 
         /* Type definitions. */
@@ -58,7 +52,7 @@ namespace sts::spl::impl {
                     /* ... */
                 }
                 ~ScopedAesKeyslot() {
-                    if (has_slot) {
+                    if (this->has_slot) {
                         FreeAesKeyslot(slot, this);
                     }
                 }
@@ -70,7 +64,7 @@ namespace sts::spl::impl {
                 Result Allocate() {
                     R_TRY(AllocateAesKeyslot(&this->slot, this));
                     this->has_slot = true;
-                    return ResultSuccess;
+                    return ResultSuccess();
                 }
         };
 
@@ -94,23 +88,23 @@ namespace sts::spl::impl {
                 u32 perm;
             public:
                 DeviceAddressSpaceMapHelper(Handle h, u64 dst, u64 src, size_t sz, u32 p) : das_hnd(h), dst_addr(dst), src_addr(src), size(sz), perm(p) {
-                    R_ASSERT(svcMapDeviceAddressSpaceAligned(this->das_hnd, CUR_PROCESS_HANDLE, this->src_addr, this->size, this->dst_addr, this->perm));
+                    R_ABORT_UNLESS(svcMapDeviceAddressSpaceAligned(this->das_hnd, dd::GetCurrentProcessHandle(), this->src_addr, this->size, this->dst_addr, this->perm));
                 }
                 ~DeviceAddressSpaceMapHelper() {
-                    R_ASSERT(svcUnmapDeviceAddressSpace(this->das_hnd, CUR_PROCESS_HANDLE, this->src_addr, this->size, this->dst_addr));
+                    R_ABORT_UNLESS(svcUnmapDeviceAddressSpace(this->das_hnd, dd::GetCurrentProcessHandle(), this->src_addr, this->size, this->dst_addr));
                 }
         };
 
         /* Global variables. */
         CtrDrbg g_drbg;
-        Event g_se_event;
-        IEvent *g_se_keyslot_available_event;
+        os::InterruptEvent g_se_event;
+        os::SystemEvent g_se_keyslot_available_event;
 
         Handle g_se_das_hnd;
         u32 g_se_mapped_work_buffer_addr;
-        u8 __attribute__((aligned(0x1000))) g_work_buffer[2 * WorkBufferSizeMax];
+        alignas(os::MemoryPageSize) u8 g_work_buffer[2 * WorkBufferSizeMax];
 
-        HosMutex g_async_op_lock;
+        os::Mutex g_async_op_lock;
 
         const void *g_keyslot_owners[MaxAesKeyslots];
         BootReasonValue g_boot_reason;
@@ -128,116 +122,33 @@ namespace sts::spl::impl {
         /* Initialization functionality. */
         void InitializeCtrDrbg() {
             u8 seed[CtrDrbg::SeedSize];
-
-            if (smc::GenerateRandomBytes(seed, sizeof(seed)) != smc::Result::Success) {
-                std::abort();
-            }
+            AMS_ABORT_UNLESS(smc::GenerateRandomBytes(seed, sizeof(seed)) == smc::Result::Success);
 
             g_drbg.Initialize(seed);
         }
 
         void InitializeSeEvents() {
             u64 irq_num;
-            smc::GetConfig(&irq_num, 1, SplConfigItem_SecurityEngineIrqNumber);
-            Handle hnd;
-            R_ASSERT(svcCreateInterruptEvent(&hnd, irq_num, 1));
-            eventLoadRemote(&g_se_event, hnd, true);
+            AMS_ABORT_UNLESS(smc::GetConfig(&irq_num, 1, SplConfigItem_SecurityEngineIrqNumber) == smc::Result::Success);
+            R_ABORT_UNLESS(g_se_event.Initialize(irq_num));
 
-            g_se_keyslot_available_event = CreateWriteOnlySystemEvent();
-            g_se_keyslot_available_event->Signal();
+            R_ABORT_UNLESS(g_se_keyslot_available_event.InitializeAsInterProcessEvent());
+            g_se_keyslot_available_event.Signal();
         }
 
         void InitializeDeviceAddressSpace() {
-            constexpr u64 DeviceName_SE = 29;
 
             /* Create Address Space. */
-            R_ASSERT(svcCreateDeviceAddressSpace(&g_se_das_hnd, 0, (1ul << 32)));
+            R_ABORT_UNLESS(svcCreateDeviceAddressSpace(&g_se_das_hnd, 0, (1ul << 32)));
 
             /* Attach it to the SE. */
-            R_ASSERT(svcAttachDeviceAddressSpace(DeviceName_SE, g_se_das_hnd));
+            R_ABORT_UNLESS(svcAttachDeviceAddressSpace(svc::DeviceName_Se, g_se_das_hnd));
 
             const u64 work_buffer_addr = reinterpret_cast<u64>(g_work_buffer);
-            g_se_mapped_work_buffer_addr = WorkBufferMapBase + (work_buffer_addr & DeviceAddressSpaceAlignMask);
+            g_se_mapped_work_buffer_addr = WorkBufferMapBase + (work_buffer_addr % DeviceAddressSpaceAlign);
 
             /* Map the work buffer for the SE. */
-            R_ASSERT(svcMapDeviceAddressSpaceAligned(g_se_das_hnd, CUR_PROCESS_HANDLE, work_buffer_addr, sizeof(g_work_buffer), g_se_mapped_work_buffer_addr, 3));
-        }
-
-        /* RSA OAEP implementation helpers. */
-        void CalcMgf1AndXor(void *dst, size_t dst_size, const void *src, size_t src_size) {
-            uint8_t *dst_u8 = reinterpret_cast<u8 *>(dst);
-
-            u32 ctr = 0;
-            while (dst_size > 0) {
-                size_t cur_size = SHA256_HASH_SIZE;
-                if (cur_size > dst_size) {
-                    cur_size = dst_size;
-                }
-                dst_size -= cur_size;
-
-                u32 ctr_be = __builtin_bswap32(ctr++);
-                u8 hash[SHA256_HASH_SIZE];
-                {
-                    Sha256Context ctx;
-                    sha256ContextCreate(&ctx);
-                    sha256ContextUpdate(&ctx, src, src_size);
-                    sha256ContextUpdate(&ctx, &ctr_be, sizeof(ctr_be));
-                    sha256ContextGetHash(&ctx, hash);
-                }
-
-                for (size_t i = 0; i < cur_size; i++) {
-                    *(dst_u8++) ^= hash[i];
-                }
-            }
-        }
-
-        size_t DecodeRsaOaep(void *dst, size_t dst_size, const void *label_digest, size_t label_digest_size, const void *src, size_t src_size) {
-            /* Very basic validation. */
-            if (dst_size == 0 || src_size != 0x100 || label_digest_size != SHA256_HASH_SIZE) {
-                return 0;
-            }
-
-            u8 block[0x100];
-            std::memcpy(block, src, sizeof(block));
-
-            /* First, validate byte 0 == 0, and unmask DB. */
-            int invalid = block[0];
-            u8 *salt = block + 1;
-            u8 *db = salt + SHA256_HASH_SIZE;
-            CalcMgf1AndXor(salt, SHA256_HASH_SIZE, db, src_size - (1 + SHA256_HASH_SIZE));
-            CalcMgf1AndXor(db, src_size - (1 + SHA256_HASH_SIZE), salt, SHA256_HASH_SIZE);
-
-            /* Validate label digest. */
-            for (size_t i = 0; i < SHA256_HASH_SIZE; i++) {
-                invalid |= db[i] ^ reinterpret_cast<const u8 *>(label_digest)[i];
-            }
-
-            /* Locate message after 00...0001 padding. */
-            const u8 *padded_msg = db + SHA256_HASH_SIZE;
-            size_t padded_msg_size = src_size - (1 + 2 * SHA256_HASH_SIZE);
-            size_t msg_ind = 0;
-            int not_found = 1;
-            int wrong_padding = 0;
-            size_t i = 0;
-            while (i < padded_msg_size) {
-                int zero = (padded_msg[i] == 0);
-                int one = (padded_msg[i] == 1);
-                msg_ind += static_cast<size_t>(not_found & one) * (++i);
-                not_found &= ~one;
-                wrong_padding |= (not_found & ~zero);
-            }
-
-            if (invalid | not_found | wrong_padding) {
-                return 0;
-            }
-
-            /* Copy message out. */
-            size_t msg_size = padded_msg_size - msg_ind;
-            if (msg_size > dst_size) {
-                return 0;
-            }
-            std::memcpy(dst, padded_msg + msg_ind, msg_size);
-            return msg_size;
+            R_ABORT_UNLESS(svcMapDeviceAddressSpaceAligned(g_se_das_hnd, dd::GetCurrentProcessHandle(), work_buffer_addr, sizeof(g_work_buffer), g_se_mapped_work_buffer_addr, 3));
         }
 
         /* Internal RNG functionality. */
@@ -257,12 +168,12 @@ namespace sts::spl::impl {
                 }
             }
 
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         /* Internal async implementation functionality. */
         void WaitSeOperationComplete() {
-            eventWait(&g_se_event, U64_MAX);
+            g_se_event.Wait();
         }
 
         smc::Result WaitCheckStatus(smc::AsyncOperationKey op_key) {
@@ -291,13 +202,9 @@ namespace sts::spl::impl {
 
         /* Internal Keyslot utility. */
         Result ValidateAesKeyslot(u32 keyslot, const void *owner) {
-            if (keyslot >= GetMaxKeyslots()) {
-                return ResultSplInvalidKeyslot;
-            }
-            if (g_keyslot_owners[keyslot] != owner && GetRuntimeFirmwareVersion() > FirmwareVersion_100) {
-                return ResultSplInvalidKeyslot;
-            }
-            return ResultSuccess;
+            R_UNLESS(keyslot < GetMaxKeyslots(), spl::ResultInvalidKeyslot());
+            R_UNLESS((g_keyslot_owners[keyslot] == owner || hos::GetVersion() == hos::Version_100), spl::ResultInvalidKeyslot());
+            return ResultSuccess();
         }
 
         /* Helper to do a single AES block decryption. */
@@ -320,7 +227,7 @@ namespace sts::spl::impl {
 
             armDCacheFlush(layout, sizeof(*layout));
             {
-                std::scoped_lock<HosMutex> lk(g_async_op_lock);
+                std::scoped_lock lk(g_async_op_lock);
                 smc::AsyncOperationKey op_key;
                 const IvCtr iv_ctr = {};
                 const u32 mode = smc::GetCryptAesMode(smc::CipherMode::CbcDecrypt, keyslot);
@@ -350,15 +257,12 @@ namespace sts::spl::impl {
             ImportSecureExpModKeyLayout *layout = reinterpret_cast<ImportSecureExpModKeyLayout *>(g_work_buffer);
 
             /* Validate size. */
-            if (src_size > sizeof(ImportSecureExpModKeyLayout)) {
-                return ResultSplInvalidSize;
-            }
-
+            R_UNLESS(src_size <= sizeof(ImportSecureExpModKeyLayout), spl::ResultInvalidSize());
             std::memcpy(layout, src, src_size);
 
             armDCacheFlush(layout, sizeof(*layout));
             smc::Result smc_res;
-            if (GetRuntimeFirmwareVersion() >= FirmwareVersion_500) {
+            if (hos::GetVersion() >= hos::Version_500) {
                 smc_res = smc::DecryptOrImportRsaPrivateKey(layout->data, src_size, access_key, key_source, static_cast<smc::DecryptOrImportMode>(option));
             } else {
                 smc_res = smc::ImportSecureExpModKey(layout->data, src_size, access_key, key_source, option);
@@ -375,15 +279,9 @@ namespace sts::spl::impl {
             SecureExpModLayout *layout = reinterpret_cast<SecureExpModLayout *>(g_work_buffer);
 
             /* Validate sizes. */
-            if (base_size > sizeof(layout->base)) {
-                return ResultSplInvalidSize;
-            }
-            if (mod_size > sizeof(layout->mod)) {
-                return ResultSplInvalidSize;
-            }
-            if (out_size > WorkBufferSizeMax) {
-                return ResultSplInvalidSize;
-            }
+            R_UNLESS(base_size <= sizeof(layout->base), spl::ResultInvalidSize());
+            R_UNLESS(mod_size <= sizeof(layout->mod), spl::ResultInvalidSize());
+            R_UNLESS(out_size <= WorkBufferSizeMax, spl::ResultInvalidSize());
 
             /* Copy data into work buffer. */
             const size_t base_ofs = sizeof(layout->base) - base_size;
@@ -395,7 +293,7 @@ namespace sts::spl::impl {
             /* Do exp mod operation. */
             armDCacheFlush(layout, sizeof(*layout));
             {
-                std::scoped_lock<HosMutex> lk(g_async_op_lock);
+                std::scoped_lock lk(g_async_op_lock);
                 smc::AsyncOperationKey op_key;
 
                 smc::Result res = smc::SecureExpMod(&op_key, layout->base, layout->mod, mode);
@@ -410,7 +308,7 @@ namespace sts::spl::impl {
             armDCacheFlush(g_work_buffer, sizeof(out_size));
 
             std::memcpy(out, g_work_buffer, out_size);
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result UnwrapEsRsaOaepWrappedKey(AccessKey *out_access_key, const void *base, size_t base_size, const void *mod, size_t mod_size, const void *label_digest, size_t label_digest_size, u32 generation, smc::EsKeyType type) {
@@ -421,15 +319,9 @@ namespace sts::spl::impl {
             UnwrapEsKeyLayout *layout = reinterpret_cast<UnwrapEsKeyLayout *>(g_work_buffer);
 
             /* Validate sizes. */
-            if (base_size > sizeof(layout->base)) {
-                return ResultSplInvalidSize;
-            }
-            if (mod_size > sizeof(layout->mod)) {
-                return ResultSplInvalidSize;
-            }
-            if (label_digest_size > LabelDigestSizeMax) {
-                return ResultSplInvalidSize;
-            }
+            R_UNLESS(base_size <= sizeof(layout->base), spl::ResultInvalidSize());
+            R_UNLESS(mod_size <= sizeof(layout->mod), spl::ResultInvalidSize());
+            R_UNLESS(label_digest_size <= LabelDigestSizeMax, spl::ResultInvalidSize());
 
             /* Copy data into work buffer. */
             const size_t base_ofs = sizeof(layout->base) - base_size;
@@ -441,7 +333,7 @@ namespace sts::spl::impl {
             /* Do exp mod operation. */
             armDCacheFlush(layout, sizeof(*layout));
             {
-                std::scoped_lock<HosMutex> lk(g_async_op_lock);
+                std::scoped_lock lk(g_async_op_lock);
                 smc::AsyncOperationKey op_key;
 
                 smc::Result res = smc::UnwrapTitleKey(&op_key, layout->base, layout->mod, label_digest, label_digest_size, smc::GetUnwrapEsKeyOption(type, generation));
@@ -456,7 +348,7 @@ namespace sts::spl::impl {
             armDCacheFlush(g_work_buffer, sizeof(*out_access_key));
 
             std::memcpy(out_access_key, g_work_buffer, sizeof(*out_access_key));
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
 
@@ -476,9 +368,7 @@ namespace sts::spl::impl {
     Result GetConfig(u64 *out, SplConfigItem which) {
         /* Nintendo explicitly blacklists package2 hash here, amusingly. */
         /* This is not blacklisted in safemode, but we're never in safe mode... */
-        if (which == SplConfigItem_Package2Hash) {
-            return ResultSplInvalidArgument;
-        }
+        R_UNLESS(which != SplConfigItem_Package2Hash, spl::ResultInvalidArgument());
 
         smc::Result res = smc::GetConfig(out, 1, which);
 
@@ -504,18 +394,10 @@ namespace sts::spl::impl {
         ExpModLayout *layout = reinterpret_cast<ExpModLayout *>(g_work_buffer);
 
         /* Validate sizes. */
-        if (base_size > sizeof(layout->base)) {
-            return ResultSplInvalidSize;
-        }
-        if (exp_size > sizeof(layout->exp)) {
-            return ResultSplInvalidSize;
-        }
-        if (mod_size > sizeof(layout->mod)) {
-            return ResultSplInvalidSize;
-        }
-        if (out_size > WorkBufferSizeMax) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(base_size <= sizeof(layout->base), spl::ResultInvalidSize());
+        R_UNLESS(exp_size <= sizeof(layout->exp), spl::ResultInvalidSize());
+        R_UNLESS(mod_size <= sizeof(layout->mod), spl::ResultInvalidSize());
+        R_UNLESS(out_size <= WorkBufferSizeMax, spl::ResultInvalidSize());
 
         /* Copy data into work buffer. */
         const size_t base_ofs = sizeof(layout->base) - base_size;
@@ -528,7 +410,7 @@ namespace sts::spl::impl {
         /* Do exp mod operation. */
         armDCacheFlush(layout, sizeof(*layout));
         {
-            std::scoped_lock<HosMutex> lk(g_async_op_lock);
+            std::scoped_lock lk(g_async_op_lock);
             smc::AsyncOperationKey op_key;
 
             smc::Result res = smc::ExpMod(&op_key, layout->base, layout->exp, exp_size, layout->mod);
@@ -543,7 +425,7 @@ namespace sts::spl::impl {
         armDCacheFlush(g_work_buffer, sizeof(out_size));
 
         std::memcpy(out, g_work_buffer, out_size);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result SetConfig(SplConfigItem which, u64 value) {
@@ -560,7 +442,7 @@ namespace sts::spl::impl {
             cur_dst += cur_size;
         }
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result IsDevelopment(bool *out) {
@@ -568,26 +450,22 @@ namespace sts::spl::impl {
         R_TRY(GetConfig(&is_retail, SplConfigItem_IsRetail));
 
         *out = (is_retail == 0);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result SetBootReason(BootReasonValue boot_reason) {
-        if (IsBootReasonSet()) {
-            return ResultSplBootReasonAlreadySet;
-        }
+        R_UNLESS(!IsBootReasonSet(), spl::ResultBootReasonAlreadySet());
 
         g_boot_reason = boot_reason;
         g_boot_reason_set = true;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result GetBootReason(BootReasonValue *out) {
-        if (!IsBootReasonSet()) {
-            return ResultSplBootReasonNotSet;
-        }
+        R_UNLESS(IsBootReasonSet(), spl::ResultBootReasonNotSet());
 
         *out = GetBootReason();
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     /* Crypto. */
@@ -603,7 +481,7 @@ namespace sts::spl::impl {
     Result GenerateAesKey(AesKey *out_key, const AccessKey &access_key, const KeySource &key_source) {
         smc::Result smc_rc;
 
-        static const KeySource s_generate_aes_key_source = {
+        static constexpr KeySource s_generate_aes_key_source = {
             .data = {0x89, 0x61, 0x5E, 0xE0, 0x5C, 0x31, 0xB6, 0x80, 0x5F, 0xE5, 0x8F, 0x3D, 0xA2, 0x4F, 0x7A, 0xA8}
         };
 
@@ -619,7 +497,7 @@ namespace sts::spl::impl {
     }
 
     Result DecryptAesKey(AesKey *out_key, const KeySource &key_source, u32 generation, u32 option) {
-        static const KeySource s_decrypt_aes_key_source = {
+        static constexpr KeySource s_decrypt_aes_key_source = {
             .data = {0x11, 0x70, 0x24, 0x2B, 0x48, 0x69, 0x11, 0xF1, 0x11, 0xB0, 0x0C, 0x47, 0x7C, 0xC3, 0xEF, 0x7E}
         };
 
@@ -634,30 +512,28 @@ namespace sts::spl::impl {
 
         /* Succeed immediately if there's nothing to crypt. */
         if (src_size == 0) {
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         /* Validate sizes. */
-        if (src_size > dst_size || src_size % AES_BLOCK_SIZE != 0) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(src_size <= dst_size,                      spl::ResultInvalidSize());
+        R_UNLESS(util::IsAligned(src_size, AES_BLOCK_SIZE), spl::ResultInvalidSize());
 
         /* We can only map 0x400000 aligned buffers for the SE. With that in mind, we have some math to do. */
         const uintptr_t src_addr = reinterpret_cast<uintptr_t>(src);
         const uintptr_t dst_addr = reinterpret_cast<uintptr_t>(dst);
-        const uintptr_t src_addr_page_aligned = src_addr & ~0xFFFul;
-        const uintptr_t dst_addr_page_aligned = dst_addr & ~0xFFFul;
-        const size_t src_size_page_aligned = ((src_addr + src_size + 0xFFFul) & ~0xFFFul) - src_addr_page_aligned;
-        const size_t dst_size_page_aligned = ((dst_addr + dst_size + 0xFFFul) & ~0xFFFul) - dst_addr_page_aligned;
-        const u32 src_se_map_addr = CryptAesInMapBase + (src_addr_page_aligned & DeviceAddressSpaceAlignMask);
-        const u32 dst_se_map_addr = CryptAesOutMapBase + (dst_addr_page_aligned & DeviceAddressSpaceAlignMask);
-        const u32 src_se_addr = CryptAesInMapBase + (src_addr & DeviceAddressSpaceAlignMask);
-        const u32 dst_se_addr = CryptAesOutMapBase + (dst_addr & DeviceAddressSpaceAlignMask);
+        const uintptr_t src_addr_page_aligned = util::AlignDown(src_addr, os::MemoryPageSize);
+        const uintptr_t dst_addr_page_aligned = util::AlignDown(dst_addr, os::MemoryPageSize);
+        const size_t src_size_page_aligned = util::AlignUp(src_addr + src_size, os::MemoryPageSize) - src_addr_page_aligned;
+        const size_t dst_size_page_aligned = util::AlignUp(dst_addr + dst_size, os::MemoryPageSize) - dst_addr_page_aligned;
+        const u32 src_se_map_addr = CryptAesInMapBase + (src_addr_page_aligned % DeviceAddressSpaceAlign);
+        const u32 dst_se_map_addr = CryptAesOutMapBase + (dst_addr_page_aligned % DeviceAddressSpaceAlign);
+        const u32 src_se_addr = CryptAesInMapBase + (src_addr % DeviceAddressSpaceAlign);
+        const u32 dst_se_addr = CryptAesOutMapBase + (dst_addr % DeviceAddressSpaceAlign);
 
         /* Validate aligned sizes. */
-        if (src_size_page_aligned > CryptAesSizeMax || dst_size_page_aligned > CryptAesSizeMax) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(src_size_page_aligned <= CryptAesSizeMax, spl::ResultInvalidSize());
+        R_UNLESS(dst_size_page_aligned <= CryptAesSizeMax, spl::ResultInvalidSize());
 
         /* Helpers for mapping/unmapping. */
         DeviceAddressSpaceMapHelper in_mapper(g_se_das_hnd,  src_se_map_addr, src_addr_page_aligned, src_size_page_aligned, 1);
@@ -676,7 +552,7 @@ namespace sts::spl::impl {
         armDCacheFlush(const_cast<void *>(src), src_size);
         armDCacheFlush(dst, dst_size);
         {
-            std::scoped_lock<HosMutex> lk(g_async_op_lock);
+            std::scoped_lock lk(g_async_op_lock);
             smc::AsyncOperationKey op_key;
             const u32 mode = smc::GetCryptAesMode(smc::CipherMode::Ctr, keyslot);
             const u32 dst_ll_addr = g_se_mapped_work_buffer_addr + offsetof(SeCryptContext, out);
@@ -693,43 +569,41 @@ namespace sts::spl::impl {
         }
         armDCacheFlush(dst, dst_size);
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result ComputeCmac(Cmac *out_cmac, u32 keyslot, const void *owner, const void *data, size_t size) {
         R_TRY(ValidateAesKeyslot(keyslot, owner));
 
-        if (size > WorkBufferSizeMax) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(size <= WorkBufferSizeMax, spl::ResultInvalidSize());
 
         std::memcpy(g_work_buffer, data, size);
         return smc::ConvertResult(smc::ComputeCmac(out_cmac, keyslot, g_work_buffer, size));
     }
 
     Result AllocateAesKeyslot(u32 *out_keyslot, const void *owner) {
-        if (GetRuntimeFirmwareVersion() <= FirmwareVersion_100) {
+        if (hos::GetVersion() <= hos::Version_100) {
             /* On 1.0.0, keyslots were kind of a wild west. */
             *out_keyslot = 0;
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         for (size_t i = 0; i < GetMaxKeyslots(); i++) {
             if (g_keyslot_owners[i] == 0) {
                 g_keyslot_owners[i] = owner;
                 *out_keyslot = static_cast<u32>(i);
-                return ResultSuccess;
+                return ResultSuccess();
             }
         }
 
-        g_se_keyslot_available_event->Clear();
-        return ResultSplOutOfKeyslots;
+        g_se_keyslot_available_event.Reset();
+        return spl::ResultOutOfKeyslots();
     }
 
     Result FreeAesKeyslot(u32 keyslot, const void *owner) {
-        if (GetRuntimeFirmwareVersion() <= FirmwareVersion_100) {
+        if (hos::GetVersion() <= hos::Version_100) {
             /* On 1.0.0, keyslots were kind of a wild west. */
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         R_TRY(ValidateAesKeyslot(keyslot, owner));
@@ -742,8 +616,8 @@ namespace sts::spl::impl {
             smc::LoadAesKey(keyslot, access_key, key_source);
         }
         g_keyslot_owners[keyslot] = nullptr;
-        g_se_keyslot_available_event->Signal();
-        return ResultSuccess;
+        g_se_keyslot_available_event.Signal();
+        return ResultSuccess();
     }
 
     /* RSA. */
@@ -754,18 +628,17 @@ namespace sts::spl::impl {
         DecryptRsaPrivateKeyLayout *layout = reinterpret_cast<DecryptRsaPrivateKeyLayout *>(g_work_buffer);
 
         /* Validate size. */
-        if (src_size < RsaPrivateKeyMetaSize || src_size > sizeof(DecryptRsaPrivateKeyLayout)) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(src_size >= RsaPrivateKeyMetaSize,              spl::ResultInvalidSize());
+        R_UNLESS(src_size <= sizeof(DecryptRsaPrivateKeyLayout), spl::ResultInvalidSize());
 
         std::memcpy(layout->data, src, src_size);
         armDCacheFlush(layout, sizeof(*layout));
 
         smc::Result smc_res;
         size_t copy_size = 0;
-        if (GetRuntimeFirmwareVersion() >= FirmwareVersion_500) {
+        if (hos::GetVersion() >= hos::Version_500) {
             copy_size = std::min(dst_size, src_size - RsaPrivateKeyMetaSize);
-            smc_res = smc::DecryptOrImportRsaPrivateKey(layout->data, src_size, access_key, key_source, smc::DecryptOrImportMode::DecryptRsaPrivateKey);
+            smc_res = smc::DecryptOrImportRsaPrivateKey(layout->data, src_size, access_key, key_source, static_cast<smc::DecryptOrImportMode>(option));
         } else {
             smc_res = smc::DecryptRsaPrivateKey(&copy_size, layout->data, src_size, access_key, key_source, option);
             copy_size = std::min(dst_size, copy_size);
@@ -790,8 +663,8 @@ namespace sts::spl::impl {
 
     /* ES */
     Result ImportEsKey(const void *src, size_t src_size, const AccessKey &access_key, const KeySource &key_source, u32 option) {
-        if (GetRuntimeFirmwareVersion() >= FirmwareVersion_500) {
-            return ImportSecureExpModKey(src, src_size, access_key, key_source, static_cast<u32>(smc::DecryptOrImportMode::ImportEsKey));
+        if (hos::GetVersion() >= hos::Version_500) {
+            return ImportSecureExpModKey(src, src_size, access_key, key_source, option);
         } else {
             struct ImportEsKeyLayout {
                 u8 data[RsaPrivateKeyMetaSize + 2 * RsaPrivateKeySize + 0x10];
@@ -799,9 +672,7 @@ namespace sts::spl::impl {
             ImportEsKeyLayout *layout = reinterpret_cast<ImportEsKeyLayout *>(g_work_buffer);
 
             /* Validate size. */
-            if (src_size > sizeof(ImportEsKeyLayout)) {
-                return ResultSplInvalidSize;
-            }
+            R_UNLESS(src_size <= sizeof(ImportEsKeyLayout), spl::ResultInvalidSize());
 
             std::memcpy(layout, src, src_size);
 
@@ -837,28 +708,22 @@ namespace sts::spl::impl {
 
     /* FS */
     Result ImportLotusKey(const void *src, size_t src_size, const AccessKey &access_key, const KeySource &key_source, u32 option) {
-        if (GetRuntimeFirmwareVersion() >= FirmwareVersion_500) {
-            option = static_cast<u32>(smc::DecryptOrImportMode::ImportLotusKey);
-        }
         return ImportSecureExpModKey(src, src_size, access_key, key_source, option);
     }
 
     Result DecryptLotusMessage(u32 *out_size, void *dst, size_t dst_size, const void *base, size_t base_size, const void *mod, size_t mod_size, const void *label_digest, size_t label_digest_size) {
         /* Validate sizes. */
-        if (dst_size > WorkBufferSizeMax || label_digest_size != LabelDigestSizeMax) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(dst_size <= WorkBufferSizeMax,           spl::ResultInvalidSize());
+        R_UNLESS(label_digest_size == LabelDigestSizeMax, spl::ResultInvalidSize());
 
         /* Nintendo doesn't check this result code, but we will. */
         R_TRY(SecureExpMod(g_work_buffer, 0x100, base, base_size, mod, mod_size, smc::SecureExpModMode::Lotus));
 
-        size_t data_size = DecodeRsaOaep(dst, dst_size, label_digest, label_digest_size, g_work_buffer, 0x100);
-        if (data_size == 0) {
-            return ResultSplDecryptionFailed;
-        }
+        size_t data_size = crypto::DecodeRsa2048OaepSha256(dst, dst_size, label_digest, label_digest_size, g_work_buffer, 0x100);
+        R_UNLESS(data_size > 0, spl::ResultDecryptionFailed());
 
         *out_size = static_cast<u32>(data_size);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result GenerateSpecificAesKey(AesKey *out_key, const KeySource &key_source, u32 generation, u32 which) {
@@ -872,10 +737,7 @@ namespace sts::spl::impl {
 
     Result GetPackage2Hash(void *dst, const size_t size) {
         u64 hash[4];
-
-        if (size < sizeof(hash)) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(size >= sizeof(hash), spl::ResultInvalidSize());
 
         smc::Result smc_res;
         if ((smc_res = smc::GetConfig(hash, 4, SplConfigItem_Package2Hash)) != smc::Result::Success) {
@@ -883,7 +745,7 @@ namespace sts::spl::impl {
         }
 
         std::memcpy(dst, hash, sizeof(hash));
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     /* Manu. */
@@ -898,9 +760,8 @@ namespace sts::spl::impl {
         ReEncryptRsaPrivateKeyLayout *layout = reinterpret_cast<ReEncryptRsaPrivateKeyLayout *>(g_work_buffer);
 
         /* Validate size. */
-        if (src_size < RsaPrivateKeyMetaSize || src_size > sizeof(ReEncryptRsaPrivateKeyLayout)) {
-            return ResultSplInvalidSize;
-        }
+        R_UNLESS(src_size >= RsaPrivateKeyMetaSize, spl::ResultInvalidSize());
+        R_UNLESS(src_size <= sizeof(ReEncryptRsaPrivateKeyLayout), spl::ResultInvalidSize());
 
         std::memcpy(layout, src, src_size);
         layout->access_key_dec = access_key_dec;
@@ -927,11 +788,11 @@ namespace sts::spl::impl {
                 FreeAesKeyslot(i, owner);
             }
         }
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Handle GetAesKeyslotAvailableEventHandle() {
-        return g_se_keyslot_available_event->GetHandle();
+        return g_se_keyslot_available_event.GetReadableHandle();
     }
 
 }

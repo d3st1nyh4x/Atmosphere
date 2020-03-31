@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,8 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#pragma once
+#include <stratosphere.hpp>
 
-namespace sts::boot::bq24193 {
+namespace ams::boot::bq24193 {
 
     constexpr u8 InputSourceControl                     = 0x00;
     constexpr u8 PowerOnConfiguration                   = 0x01;
@@ -38,9 +40,9 @@ namespace sts::boot::bq24193 {
     constexpr u32 ChargeVoltageLimitMax = 4208;
 
     inline u8 EncodeChargeVoltageLimit(u32 voltage) {
-        if (voltage < ChargeVoltageLimitMin || voltage > ChargeVoltageLimitMax) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(voltage >= ChargeVoltageLimitMin);
+        AMS_ABORT_UNLESS(voltage <= ChargeVoltageLimitMax);
+
         voltage -= ChargeVoltageLimitMin;
         voltage >>= 4;
         return static_cast<u8>(voltage << 2);
@@ -54,9 +56,9 @@ namespace sts::boot::bq24193 {
     constexpr u32 FastChargeCurrentLimitMax = 4544;
 
     inline u8 EncodeFastChargeCurrentLimit(u32 current) {
-        if (current < FastChargeCurrentLimitMin || current > FastChargeCurrentLimitMax) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(current >= FastChargeCurrentLimitMin);
+        AMS_ABORT_UNLESS(current <= FastChargeCurrentLimitMax);
+
         current -= FastChargeCurrentLimitMin;
         current >>= 6;
         return static_cast<u8>(current << 2);
@@ -81,9 +83,9 @@ namespace sts::boot::bq24193 {
     constexpr u32 PreChargeCurrentLimitMax = 2048;
 
     inline u8 EncodePreChargeCurrentLimit(u32 current) {
-        if (current < PreChargeCurrentLimitMin || current > PreChargeCurrentLimitMax) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(current >= PreChargeCurrentLimitMin);
+        AMS_ABORT_UNLESS(current <= PreChargeCurrentLimitMax);
+
         current -= PreChargeCurrentLimitMin;
         current >>= 7;
         return static_cast<u8>(current << 4);
@@ -97,9 +99,9 @@ namespace sts::boot::bq24193 {
     constexpr u32 TerminationCurrentLimitMax = 2048;
 
     inline u8 EncodeTerminationCurrentLimit(u32 current) {
-        if (current < TerminationCurrentLimitMin || current > TerminationCurrentLimitMax) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(current >= TerminationCurrentLimitMin);
+        AMS_ABORT_UNLESS(current <= TerminationCurrentLimitMax);
+
         current -= TerminationCurrentLimitMin;
         current >>= 7;
         return static_cast<u8>(current);
@@ -113,9 +115,9 @@ namespace sts::boot::bq24193 {
     constexpr u32 MinimumSystemVoltageLimitMax = 3700;
 
     inline u8 EncodeMinimumSystemVoltageLimit(u32 voltage) {
-        if (voltage < MinimumSystemVoltageLimitMin || voltage > MinimumSystemVoltageLimitMax) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(voltage >= MinimumSystemVoltageLimitMin);
+        AMS_ABORT_UNLESS(voltage <= MinimumSystemVoltageLimitMax);
+
         voltage -= MinimumSystemVoltageLimitMin;
         voltage /= 100;
         return static_cast<u8>(voltage << 1);

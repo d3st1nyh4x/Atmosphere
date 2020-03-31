@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,17 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c/i2c_types.hpp"
 #include "i2c/driver/impl/i2c_pcv.hpp"
 #include "i2c/driver/impl/i2c_registers.hpp"
 
-using namespace sts::i2c::driver::impl;
+using namespace ams::i2c::driver::impl;
 
-namespace sts::pcv {
+namespace ams::pcv {
 
     void Initialize() {
         /* Don't do anything. */
@@ -44,19 +40,19 @@ namespace sts::pcv {
         reg::ReadWrite(regs.clk_src_reg, 0, 0xE0000000);
         svcSleepThread(2000ul);
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result SetClockEnabled(PcvModule module, bool enabled) {
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result SetVoltageEnabled(u32 domain, bool enabled) {
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result SetVoltageValue(u32 domain, u32 voltage) {
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result SetReset(PcvModule module, bool reset) {
@@ -71,7 +67,7 @@ namespace sts::pcv {
             reg::ClearBits(regs.rst_reg, regs.mask);
         }
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
 }

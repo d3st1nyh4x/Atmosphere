@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,28 +13,24 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "boot_i2c_utils.hpp"
 #include "boot_pmic_driver.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     void PmicDriver::ShutdownSystem() {
-        R_ASSERT(this->ShutdownSystem(false));
+        R_ABORT_UNLESS(this->ShutdownSystem(false));
     }
 
     void PmicDriver::RebootSystem() {
-        R_ASSERT(this->ShutdownSystem(true));
+        R_ABORT_UNLESS(this->ShutdownSystem(true));
     }
 
     Result PmicDriver::GetAcOk(bool *out) {
         u8 power_status;
         R_TRY(this->GetPowerStatus(&power_status));
         *out = (power_status & 0x02) != 0;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result PmicDriver::GetPowerIntr(u8 *out) {
@@ -56,7 +52,7 @@ namespace sts::boot {
         u8 power_intr;
         R_TRY(this->GetPowerIntr(&power_intr));
         *out = (power_intr & 0x08) != 0;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result PmicDriver::ShutdownSystem(bool reboot) {
@@ -65,31 +61,31 @@ namespace sts::boot {
 
         /* Get value, set or clear software reset mask. */
         u8 on_off_2_val = 0;
-        R_ASSERT(ReadI2cRegister(this->i2c_session, &on_off_2_val, sizeof(on_off_2_val), &on_off_2_addr, sizeof(on_off_2_addr)));
+        R_ABORT_UNLESS(ReadI2cRegister(this->i2c_session, &on_off_2_val, sizeof(on_off_2_val), &on_off_2_addr, sizeof(on_off_2_addr)));
         if (reboot) {
             on_off_2_val |= 0x80;
         } else {
             on_off_2_val &= ~0x80;
         }
-        R_ASSERT(WriteI2cRegister(this->i2c_session, &on_off_2_val, sizeof(on_off_2_val), &on_off_2_addr, sizeof(on_off_2_addr)));
+        R_ABORT_UNLESS(WriteI2cRegister(this->i2c_session, &on_off_2_val, sizeof(on_off_2_val), &on_off_2_addr, sizeof(on_off_2_addr)));
 
         /* Get value, set software reset mask. */
         u8 on_off_1_val = 0;
-        R_ASSERT(ReadI2cRegister(this->i2c_session, &on_off_1_val, sizeof(on_off_1_val), &on_off_1_addr, sizeof(on_off_1_addr)));
+        R_ABORT_UNLESS(ReadI2cRegister(this->i2c_session, &on_off_1_val, sizeof(on_off_1_val), &on_off_1_addr, sizeof(on_off_1_addr)));
         on_off_1_val |= 0x80;
 
-        /* Finalize the battery. */
-        {
+        /* Finalize the battery on non-Calcio. */
+        if (spl::GetHardwareType() != spl::HardwareType::Calcio) {
             BatteryDriver battery_driver;
             this->FinalizeBattery(&battery_driver);
         }
 
         /* Actually write the value to trigger shutdown/reset. */
-        R_ASSERT(WriteI2cRegister(this->i2c_session, &on_off_1_val, sizeof(on_off_1_val), &on_off_1_addr, sizeof(on_off_1_addr)));
+        R_ABORT_UNLESS(WriteI2cRegister(this->i2c_session, &on_off_1_val, sizeof(on_off_1_val), &on_off_1_addr, sizeof(on_off_1_addr)));
 
         /* Allow up to 5 seconds for shutdown/reboot to take place. */
         svcSleepThread(5'000'000'000ul);
-        std::abort();
+        AMS_ABORT_UNLESS(false);
     }
 
     void PmicDriver::FinalizeBattery(BatteryDriver *battery_driver) {
@@ -102,6 +98,15 @@ namespace sts::boot {
             return;
         }
 
+        /* On Hoag, we don't want to use the desired shutdown value when battery charged. */
+        bool use_desired_shutdown = true;
+        if (spl::GetHardwareType() == spl::HardwareType::Hoag) {
+            double battery_charge;
+            if (R_FAILED(battery_driver->GetSocRep(&battery_charge)) || battery_charge >= 80.0) {
+                use_desired_shutdown = false;
+            }
+        }
+
         bool ac_ok;
         bool desired_shutdown_enabled;
         if (R_FAILED(this->GetAcOk(&ac_ok)) || ac_ok) {
@@ -109,6 +114,8 @@ namespace sts::boot {
         } else {
             desired_shutdown_enabled = true;
         }
+
+        desired_shutdown_enabled &= use_desired_shutdown;
 
         if (shutdown_enabled != desired_shutdown_enabled) {
             battery_driver->SetShutdownEnabled(desired_shutdown_enabled);

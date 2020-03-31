@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,10 +13,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "boot_calibration.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     namespace {
 
@@ -29,8 +28,6 @@ namespace sts::boot {
         constexpr u32 DefaultBatteryVendor = static_cast<u32>('A');
         constexpr u32 DefaultBatteryVersion = 0;
 
-        constexpr Result ResultCalInvalidCrc = 0xCAC6; /* TODO: Verify this really is cal, move to libstrat results. */
-
         /* Helpers. */
         constexpr u16 GetCrc16(const void *data, size_t size) {
             constexpr u16 s_crc_table[0x10] = {
@@ -38,9 +35,7 @@ namespace sts::boot {
                 0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400
             };
 
-            if (data == nullptr) {
-                std::abort();
-            }
+            AMS_ABORT_UNLESS(data != nullptr);
 
             u16 crc16 = 0x55AA;
             const u8 *data_u8 = reinterpret_cast<const u8 *>(data);
@@ -53,15 +48,14 @@ namespace sts::boot {
 
         Result ValidateCalibrationCrc16(const void *data, size_t size) {
             const u8 *data_u8 = reinterpret_cast<const u8 *>(data);
-            if (GetCrc16(data, size - sizeof(u16)) != *(reinterpret_cast<const u16 *>(&data_u8[size - sizeof(u16)]))) {
-                return ResultCalInvalidCrc;
-            }
-            return ResultSuccess;
+            const bool crc_valid = GetCrc16(data, size - sizeof(u16)) == *(reinterpret_cast<const u16 *>(&data_u8[size - sizeof(u16)]));
+            R_UNLESS(crc_valid, cal::ResultCalibrationDataCrcError());
+            return ResultSuccess();
         }
 
         Result GetBatteryVendorImpl(u32 *vendor) {
             FsStorage s;
-            R_TRY(fsOpenBisStorage(&s, FsBisStorageId_CalibrationBinary));
+            R_TRY(fsOpenBisStorage(&s, FsBisPartitionId_CalibrationBinary));
             ON_SCOPE_EXIT { fsStorageClose(&s); };
 
             u8 battery_lot[BatteryLotSize];
@@ -70,12 +64,12 @@ namespace sts::boot {
             R_TRY(ValidateCalibrationCrc16(battery_lot, sizeof(battery_lot)));
 
             *vendor = battery_lot[7];
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result GetBatteryVersionImpl(u32 *version) {
             FsStorage s;
-            R_TRY(fsOpenBisStorage(&s, FsBisStorageId_CalibrationBinary));
+            R_TRY(fsOpenBisStorage(&s, FsBisPartitionId_CalibrationBinary));
             ON_SCOPE_EXIT { fsStorageClose(&s); };
 
             u8 battery_version[BatteryVersionSize];
@@ -84,7 +78,7 @@ namespace sts::boot {
             R_TRY(ValidateCalibrationCrc16(battery_version, sizeof(battery_version)));
 
             *version = battery_version[0];
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
     }

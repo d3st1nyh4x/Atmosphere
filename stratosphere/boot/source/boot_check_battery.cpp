@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,7 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "boot_battery_driver.hpp"
 #include "boot_battery_icons.hpp"
 #include "boot_boot_reason.hpp"
@@ -23,7 +22,7 @@
 #include "boot_pmic_driver.hpp"
 #include "boot_power_utils.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     namespace {
 
@@ -100,8 +99,7 @@ namespace sts::boot {
                     return &BatteryChargeParameters1;
                 case 2:
                     return &BatteryChargeParameters2;
-                default:
-                    std::abort();
+                AMS_UNREACHABLE_DEFAULT_CASE();
             }
         }
 
@@ -281,8 +279,7 @@ namespace sts::boot {
             case CheckBatteryResult::Reboot:
                 RebootSystem();
                 break;
-            default:
-                std::abort();
+            AMS_UNREACHABLE_DEFAULT_CASE();
         }
     }
 

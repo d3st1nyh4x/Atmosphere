@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,20 +13,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/ldr.hpp>
 
-namespace sts::ldr::ro {
+namespace ams::ldr::ro {
 
     /* RO Manager API. */
-    Result PinTitle(PinId *out, const ncm::TitleLocation &loc);
-    Result UnpinTitle(PinId id);
-    Result GetTitleLocation(ncm::TitleLocation *out, PinId id);
-    Result RegisterProcess(PinId id, u64 process_id, ncm::TitleId title_id);
+    Result PinProgram(PinId *out, const ncm::ProgramLocation &loc, const cfg::OverrideStatus &status);
+    Result UnpinProgram(PinId id);
+    Result GetProgramLocationAndStatus(ncm::ProgramLocation *out, cfg::OverrideStatus *out_status, PinId id);
+    Result RegisterProcess(PinId id, os::ProcessId process_id, ncm::ProgramId program_id);
     Result RegisterModule(PinId id, const u8 *build_id, uintptr_t address, size_t size);
-    Result GetProcessModuleInfo(u32 *out_count, ModuleInfo *out, size_t max_out_count, u64 process_id);
+    Result GetProcessModuleInfo(u32 *out_count, ModuleInfo *out, size_t max_out_count, os::ProcessId process_id);
 
 }

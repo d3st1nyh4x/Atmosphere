@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -22,7 +22,7 @@
 #include "mmu.h"
 #include "memory_map.h"
 
-static exosphere_config_t g_exosphere_cfg = {MAGIC_EXOSPHERE_CONFIG, ATMOSPHERE_TARGET_FIRMWARE_DEFAULT_FOR_DEBUG, EXOSPHERE_FLAGS_DEFAULT};
+static exosphere_config_t g_exosphere_cfg = {MAGIC_EXOSPHERE_CONFIG, ATMOSPHERE_TARGET_FIRMWARE_CURRENT, EXOSPHERE_FLAGS_DEFAULT};
 static bool g_has_loaded_config = false;
 
 #define EXOSPHERE_CHECK_FLAG(flag) ((g_exosphere_cfg.flags & flag) != 0)
@@ -82,6 +82,14 @@ unsigned int exosphere_should_disable_usermode_exception_handlers(void) {
     }
 
     return EXOSPHERE_CHECK_FLAG(EXOSPHERE_FLAG_DISABLE_USERMODE_EXCEPTION_HANDLERS);
+}
+
+unsigned int exosphere_should_enable_usermode_pmu_access(void) {
+    if (!g_has_loaded_config) {
+        generic_panic();
+    }
+
+    return EXOSPHERE_CHECK_FLAG(EXOSPHERE_FLAG_ENABLE_USERMODE_PMU_ACCESS);
 }
 
 const exo_emummc_config_t *exosphere_get_emummc_config(void) {

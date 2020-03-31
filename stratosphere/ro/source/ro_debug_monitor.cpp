@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,21 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <climits>
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "ro_debug_monitor.hpp"
 #include "impl/ro_service_impl.hpp"
 
-namespace sts::ro {
+namespace ams::ro {
 
-    Result DebugMonitorService::GetProcessModuleInfo(Out<u32> count, OutBuffer<LoaderModuleInfo> out_infos, u64 pid) {
-        if (out_infos.num_elements > INT_MAX) {
-            return ResultRoInvalidSize;
-        }
-        return impl::GetProcessModuleInfo(count.GetPointer(), out_infos.buffer, out_infos.num_elements, pid);
+    Result DebugMonitorService::GetProcessModuleInfo(sf::Out<u32> out_count, const sf::OutArray<LoaderModuleInfo> &out_infos, os::ProcessId process_id) {
+        R_UNLESS(out_infos.GetSize() <= std::numeric_limits<s32>::max(), ResultInvalidSize());
+        return impl::GetProcessModuleInfo(out_count.GetPointer(), out_infos.GetPointer(), out_infos.GetSize(), process_id);
     }
 
 }

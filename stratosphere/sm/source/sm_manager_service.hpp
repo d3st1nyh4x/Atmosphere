@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,17 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/sm.hpp>
-#include <stratosphere/ncm.hpp>
 
-namespace sts::sm {
+namespace ams::sm {
 
     /* Service definition. */
-    class ManagerService final : public IServiceObject {
+    class ManagerService final : public sf::IServiceObject {
         protected:
             /* Command IDs. */
             enum class CommandId {
@@ -36,19 +32,19 @@ namespace sts::sm {
             };
         private:
             /* Actual commands. */
-            virtual Result RegisterProcess(u64 pid, InBuffer<u8> acid_sac, InBuffer<u8> aci_sac);
-            virtual Result UnregisterProcess(u64 pid);
+            virtual Result RegisterProcess(os::ProcessId process_id, const sf::InBuffer &acid_sac, const sf::InBuffer &aci_sac);
+            virtual Result UnregisterProcess(os::ProcessId process_id);
             virtual void AtmosphereEndInitDefers();
-            virtual void AtmosphereHasMitm(Out<bool> out, ServiceName service);
-            virtual Result AtmosphereRegisterProcess(u64 pid, ncm::TitleId tid, InBuffer<u8> acid_sac, InBuffer<u8> aci_sac);
+            virtual void AtmosphereHasMitm(sf::Out<bool> out, ServiceName service);
+            virtual Result AtmosphereRegisterProcess(os::ProcessId process_id, ncm::ProgramId program_id, cfg::OverrideStatus override_status, const sf::InBuffer &acid_sac, const sf::InBuffer &aci_sac);
         public:
             DEFINE_SERVICE_DISPATCH_TABLE {
-                MAKE_SERVICE_COMMAND_META(ManagerService, RegisterProcess),
-                MAKE_SERVICE_COMMAND_META(ManagerService, UnregisterProcess),
+                MAKE_SERVICE_COMMAND_META(RegisterProcess),
+                MAKE_SERVICE_COMMAND_META(UnregisterProcess),
 
-                MAKE_SERVICE_COMMAND_META(ManagerService, AtmosphereEndInitDefers),
-                MAKE_SERVICE_COMMAND_META(ManagerService, AtmosphereHasMitm),
-                MAKE_SERVICE_COMMAND_META(ManagerService, AtmosphereRegisterProcess),
+                MAKE_SERVICE_COMMAND_META(AtmosphereEndInitDefers),
+                MAKE_SERVICE_COMMAND_META(AtmosphereHasMitm),
+                MAKE_SERVICE_COMMAND_META(AtmosphereRegisterProcess),
             };
     };
 

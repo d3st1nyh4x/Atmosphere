@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,19 +13,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c_driver_types.hpp"
 #include "i2c_bus_accessor.hpp"
 
-namespace sts::i2c::driver::impl {
+namespace ams::i2c::driver::impl {
 
     class Session {
         private:
-            HosMutex bus_accessor_mutex;
+            os::Mutex bus_accessor_mutex;
             BusAccessor *bus_accessor = nullptr;
             Bus bus = Bus::I2C1;
             u32 slave_address = 0;

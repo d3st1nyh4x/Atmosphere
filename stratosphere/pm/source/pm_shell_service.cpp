@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,51 +13,50 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "pm_shell_service.hpp"
 #include "impl/pm_process_manager.hpp"
 
-namespace sts::pm::shell {
+namespace ams::pm::shell {
 
     /* Overrides for libstratosphere pm::shell commands. */
-    Result LaunchTitle(u64 *out_process_id, const ncm::TitleLocation &loc, u32 launch_flags) {
-        return impl::LaunchTitle(out_process_id, loc, launch_flags);
+    Result LaunchProgram(os::ProcessId *out_process_id, const ncm::ProgramLocation &loc, u32 launch_flags) {
+        return impl::LaunchProgram(out_process_id, loc, launch_flags);
     }
 
     /* Service command implementations. */
-    Result ShellServiceBase::LaunchTitle(Out<u64> out_process_id, ncm::TitleLocation loc, u32 flags) {
-        return pm::shell::LaunchTitle(out_process_id.GetPointer(), loc, flags);
+    Result ShellServiceBase::LaunchProgram(sf::Out<os::ProcessId> out_process_id, const ncm::ProgramLocation &loc, u32 flags) {
+        return pm::shell::LaunchProgram(out_process_id.GetPointer(), loc, flags);
     }
 
-    Result ShellServiceBase::TerminateProcess(u64 process_id) {
+    Result ShellServiceBase::TerminateProcess(os::ProcessId process_id) {
         return impl::TerminateProcess(process_id);
     }
 
-    Result ShellServiceBase::TerminateTitle(ncm::TitleId title_id) {
-        return impl::TerminateTitle(title_id);
+    Result ShellServiceBase::TerminateProgram(ncm::ProgramId program_id) {
+        return impl::TerminateProgram(program_id);
     }
 
-    void ShellServiceBase::GetProcessEventHandle(Out<CopiedHandle> out) {
-        R_ASSERT(impl::GetProcessEventHandle(out.GetHandlePointer()));
+    void ShellServiceBase::GetProcessEventHandle(sf::OutCopyHandle out) {
+        R_ABORT_UNLESS(impl::GetProcessEventHandle(out.GetHandlePointer()));
     }
 
-    void ShellServiceBase::GetProcessEventInfo(Out<ProcessEventInfo> out) {
-        R_ASSERT(impl::GetProcessEventInfo(out.GetPointer()));
+    void ShellServiceBase::GetProcessEventInfo(sf::Out<ProcessEventInfo> out) {
+        R_ABORT_UNLESS(impl::GetProcessEventInfo(out.GetPointer()));
     }
 
-    Result ShellServiceBase::CleanupProcess(u64 process_id) {
+    Result ShellServiceBase::CleanupProcess(os::ProcessId process_id) {
         return impl::CleanupProcess(process_id);
     }
 
-    Result ShellServiceBase::ClearExceptionOccurred(u64 process_id) {
+    Result ShellServiceBase::ClearExceptionOccurred(os::ProcessId process_id) {
         return impl::ClearExceptionOccurred(process_id);
     }
 
     void ShellServiceBase::NotifyBootFinished() {
-        R_ASSERT(impl::NotifyBootFinished());
+        R_ABORT_UNLESS(impl::NotifyBootFinished());
     }
 
-    Result ShellServiceBase::GetApplicationProcessIdForShell(Out<u64> out) {
+    Result ShellServiceBase::GetApplicationProcessIdForShell(sf::Out<os::ProcessId> out) {
         return impl::GetApplicationProcessId(out.GetPointer());
     }
 
@@ -69,8 +68,8 @@ namespace sts::pm::shell {
         return impl::BoostApplicationThreadResourceLimit();
     }
 
-    void ShellServiceBase::GetBootFinishedEventHandle(Out<CopiedHandle> out) {
-        R_ASSERT(impl::GetBootFinishedEventHandle(out.GetHandlePointer()));
+    void ShellServiceBase::GetBootFinishedEventHandle(sf::OutCopyHandle out) {
+        R_ABORT_UNLESS(impl::GetBootFinishedEventHandle(out.GetHandlePointer()));
     }
 
 }

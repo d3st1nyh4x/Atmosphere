@@ -18,13 +18,15 @@ typedef struct {
 /* Command forwarders. */
 Result nsGetDocumentInterfaceFwd(Service* s, NsDocumentInterface* out);
 
-Result nsamGetApplicationContentPathFwd(Service* s, void* out, size_t out_size, u64 app_id, FsStorageId storage_id);
-Result nsamResolveApplicationContentPathFwd(Service* s, u64 title_id, FsStorageId storage_id);
-Result nsamGetRunningApplicationProgramIdFwd(Service* s, u64* out_tid, u64 app_id);
+Result nsamGetApplicationContentPathFwd(Service* s, void* out, size_t out_size, u64 app_id, NcmContentType content_type);
+Result nsamResolveApplicationContentPathFwd(Service* s, u64 app_id, NcmContentType content_type);
+Result nsamGetRunningApplicationProgramIdFwd(Service* s, u64* out_program_id, u64 app_id);
 
-Result nswebGetApplicationContentPath(NsDocumentInterface* doc, void* out, size_t out_size, u64 app_id, FsStorageId storage_id);
-Result nswebResolveApplicationContentPath(NsDocumentInterface* doc, u64 title_id, FsStorageId storage_id);
-Result nswebGetRunningApplicationProgramId(NsDocumentInterface* doc, u64* out_tid, u64 app_id);
+Result nswebGetApplicationContentPath(NsDocumentInterface* doc, void* out, size_t out_size, u64 app_id, NcmContentType content_type);
+Result nswebResolveApplicationContentPath(NsDocumentInterface* doc, u64 app_id, NcmContentType content_type);
+Result nswebGetRunningApplicationProgramId(NsDocumentInterface* doc, u64* out_program_id, u64 app_id);
+
+void nsDocumentInterfaceClose(NsDocumentInterface* doc);
 
 #ifdef __cplusplus
 }

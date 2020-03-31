@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,16 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c_session.hpp"
 
-namespace sts::i2c::driver::impl {
+namespace ams::i2c::driver::impl {
 
     void Session::Open(Bus bus, u32 slave_address, AddressingMode addr_mode, SpeedMode speed_mode, BusAccessor *bus_accessor, u32 max_retries, u64 retry_wait_time) {
-        std::scoped_lock<HosMutex> lk(this->bus_accessor_mutex);
+        std::scoped_lock lk(this->bus_accessor_mutex);
         if (!this->open) {
             this->bus_accessor = bus_accessor;
             this->bus = bus;
@@ -36,7 +32,7 @@ namespace sts::i2c::driver::impl {
     }
 
     void Session::Start() {
-        std::scoped_lock<HosMutex> lk(this->bus_accessor_mutex);
+        std::scoped_lock lk(this->bus_accessor_mutex);
         if (this->open) {
             if (this->bus_accessor->GetOpenSessions() == 1) {
                 this->bus_accessor->DoInitialConfig();
@@ -45,7 +41,7 @@ namespace sts::i2c::driver::impl {
     }
 
     void Session::Close() {
-        std::scoped_lock<HosMutex> lk(this->bus_accessor_mutex);
+        std::scoped_lock lk(this->bus_accessor_mutex);
         if (this->open) {
             this->bus_accessor->Close();
             this->bus_accessor = nullptr;
@@ -58,11 +54,9 @@ namespace sts::i2c::driver::impl {
     }
 
     Result Session::DoTransaction(void *dst, const void *src, size_t num_bytes, I2cTransactionOption option, Command command) {
-        std::scoped_lock<HosMutex> lk(this->bus_accessor_mutex);
+        std::scoped_lock lk(this->bus_accessor_mutex);
 
-        if (this->bus_accessor->GetBusy()) {
-            return ResultI2cBusBusy;
-        }
+        R_UNLESS(!this->bus_accessor->GetBusy(), i2c::ResultBusBusy());
 
         this->bus_accessor->OnStartTransaction();
         ON_SCOPE_EXIT { this->bus_accessor->OnStopTransaction(); };
@@ -76,27 +70,25 @@ namespace sts::i2c::driver::impl {
             case Command::Receive:
                 R_TRY(this->bus_accessor->Receive(reinterpret_cast<u8 *>(dst), num_bytes, option, this->addressing_mode, this->slave_address));
                 break;
-            default:
-                std::abort();
+            AMS_UNREACHABLE_DEFAULT_CASE();
         }
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result Session::DoTransactionWithRetry(void *dst, const void *src, size_t num_bytes, I2cTransactionOption option, Command command) {
         size_t i = 0;
         while (true) {
             R_TRY_CATCH(this->DoTransaction(dst, src, num_bytes, option, command)) {
-                R_CATCH(ResultI2cTimedOut) {
-                    i++;
-                    if (i <= this->max_retries) {
+                R_CATCH(i2c::ResultTimedOut) {
+                    if ((++i) <= this->max_retries) {
                         svcSleepThread(this->retry_wait_time);
                         continue;
                     }
-                    return ResultI2cBusBusy;
+                    return i2c::ResultBusBusy();
                 }
             } R_END_TRY_CATCH;
-            return ResultSuccess;
+            return ResultSuccess();
         }
     }
 

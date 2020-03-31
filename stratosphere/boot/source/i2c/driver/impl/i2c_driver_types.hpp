@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,14 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "../../i2c_types.hpp"
 
-namespace sts::i2c::driver::impl {
+namespace ams::i2c::driver::impl {
 
     enum class Command {
         Send    = 0,
@@ -43,9 +39,7 @@ namespace sts::i2c::driver::impl {
     }
 
     constexpr inline Bus ConvertFromIndex(size_t idx) {
-        if (idx >= static_cast<size_t>(Bus::Count)) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(idx < static_cast<size_t>(Bus::Count));
         return static_cast<Bus>(idx);
     }
 
@@ -63,8 +57,7 @@ namespace sts::i2c::driver::impl {
                 return PcvModule_I2C5;
             case Bus::I2C6:
                 return PcvModule_I2C6;
-            default:
-                std::abort();
+            AMS_UNREACHABLE_DEFAULT_CASE();
         }
     }
 
@@ -82,8 +75,7 @@ namespace sts::i2c::driver::impl {
                 return Bus::I2C5;
             case PcvModule_I2C6:
                 return Bus::I2C6;
-            default:
-                std::abort();
+            AMS_UNREACHABLE_DEFAULT_CASE();
         }
     }
 

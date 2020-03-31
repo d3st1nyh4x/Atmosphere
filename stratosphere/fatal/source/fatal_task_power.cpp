@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,16 +13,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "fatal_config.hpp"
 #include "fatal_task_power.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
     namespace {
 
         /* Task types. */
-        class PowerControlTask : public ITask {
+        class PowerControlTask : public ITaskWithDefaultStack {
             private:
                 bool TryShutdown();
                 void MonitorBatteryState();
@@ -33,7 +32,7 @@ namespace sts::fatal::srv {
                 }
         };
 
-        class PowerButtonObserveTask : public ITask {
+        class PowerButtonObserveTask : public ITaskWithDefaultStack {
             private:
                 void WaitForPowerButton();
             public:
@@ -43,7 +42,7 @@ namespace sts::fatal::srv {
                 }
         };
 
-        class StateTransitionStopTask : public ITask {
+        class StateTransitionStopTask : public ITaskWithDefaultStack {
             public:
                 virtual Result Run() override;
                 virtual const char *GetName() const override {
@@ -59,7 +58,7 @@ namespace sts::fatal::srv {
         /* Task Implementations. */
         bool PowerControlTask::TryShutdown() {
             /* Set a timeout of 30 seconds. */
-            TimeoutHelper timeout_helper(30'000'000'000ul);
+            os::TimeoutHelper timeout_helper(30'000'000'000ul);
 
             bool perform_shutdown = true;
             PsmBatteryVoltageState bv_state = PsmBatteryVoltageState_Normal;
@@ -95,7 +94,7 @@ namespace sts::fatal::srv {
             /* Check the battery state, and shutdown on low voltage. */
             if (R_FAILED(psmGetBatteryVoltageState(&bv_state)) || bv_state == PsmBatteryVoltageState_NeedsShutdown) {
                 /* Wait a second for the error report task to finish. */
-                eventWait(const_cast<Event *>(&this->context->erpt_event), TimeoutHelper::NsToTick(1'000'000'000ul));
+                eventWait(const_cast<Event *>(&this->context->erpt_event), os::TimeoutHelper::NsToTick(1'000'000'000ul));
                 this->TryShutdown();
                 return;
             }
@@ -129,12 +128,12 @@ namespace sts::fatal::srv {
 
         void PowerButtonObserveTask::WaitForPowerButton() {
             /* Wait up to a second for error report generation to finish. */
-            eventWait(const_cast<Event *>(&this->context->erpt_event), TimeoutHelper::NsToTick(1'000'000'000ul));
+            eventWait(const_cast<Event *>(&this->context->erpt_event), os::TimeoutHelper::NsToTick(1'000'000'000ul));
 
             /* Force a reboot after some time if kiosk unit. */
             const auto &config = GetFatalConfig();
-            TimeoutHelper quest_reboot_helper(config.GetQuestRebootTimeoutInterval());
-            TimeoutHelper fatal_reboot_helper(config.GetFatalRebootTimeoutInterval());
+            os::TimeoutHelper quest_reboot_helper(config.GetQuestRebootTimeoutInterval());
+            os::TimeoutHelper fatal_reboot_helper(config.GetFatalRebootTimeoutInterval());
 
             bool check_vol_up = true, check_vol_down = true;
             GpioPadSession vol_up_btn, vol_down_btn;
@@ -178,18 +177,18 @@ namespace sts::fatal::srv {
 
         Result PowerControlTask::Run() {
             this->MonitorBatteryState();
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result PowerButtonObserveTask::Run() {
             this->WaitForPowerButton();
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result StateTransitionStopTask::Run() {
             /* Nintendo ignores the output of this call... */
             spsmPutErrorState();
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
     }

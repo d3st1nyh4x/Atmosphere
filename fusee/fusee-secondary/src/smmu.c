@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -237,7 +237,6 @@ void smmu_emulate_tsec(void *tsec_keys, const void *package1, size_t package1_si
         mc_page[0x65C/4] = 0;
         mc_page[0x660/4] = 0x80000000;
         
-    
         /* Run the TSEC firmware. */
         tsec_run_fw();
     
@@ -245,7 +244,7 @@ void smmu_emulate_tsec(void *tsec_keys, const void *package1, size_t package1_si
         volatile uint32_t *key_data = (volatile uint32_t *)((void *)se_page + 0x320);
         uint32_t old_key_data = *key_data;
         uint32_t buf_counter = 0;
-        while (!(tsec->FALCON_CPUCTL & 0x10)) {
+        while (!(tsec->TSEC_FALCON_CPUCTL & 0x10)) {
             const uint32_t new_key_data = *key_data;
             if (new_key_data != old_key_data) {
                 old_key_data = new_key_data;

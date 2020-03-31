@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -15,14 +15,12 @@
  */
 
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/sm.hpp>
 
-namespace sts::sm {
+namespace ams::sm {
 
     /* Service definition. */
-    class DmntService final : public IServiceObject {
+    class DmntService final : public sf::IServiceObject {
         protected:
             /* Command IDs. */
             enum class CommandId {
@@ -32,14 +30,14 @@ namespace sts::sm {
             };
         private:
             /* Actual commands. */
-            virtual Result AtmosphereGetRecord(Out<ServiceRecord> record, ServiceName service);
-            virtual void AtmosphereListRecords(OutBuffer<ServiceRecord> records, Out<u64> out_count, u64 offset);
-            virtual void AtmosphereGetRecordSize(Out<u64> record_size);
+            virtual Result AtmosphereGetRecord(sf::Out<ServiceRecord> record, ServiceName service);
+            virtual void AtmosphereListRecords(const sf::OutArray<ServiceRecord> &records, sf::Out<u64> out_count, u64 offset);
+            virtual void AtmosphereGetRecordSize(sf::Out<u64> record_size);
         public:
             DEFINE_SERVICE_DISPATCH_TABLE {
-                MAKE_SERVICE_COMMAND_META(DmntService, AtmosphereGetRecord),
-                MAKE_SERVICE_COMMAND_META(DmntService, AtmosphereListRecords),
-                MAKE_SERVICE_COMMAND_META(DmntService, AtmosphereGetRecordSize),
+                MAKE_SERVICE_COMMAND_META(AtmosphereGetRecord),
+                MAKE_SERVICE_COMMAND_META(AtmosphereListRecords),
+                MAKE_SERVICE_COMMAND_META(AtmosphereGetRecordSize),
             };
     };
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 naehrwert
  * Copyright (c) 2018 CTCaer
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -162,16 +162,16 @@ void config_se_brom()
     set_aes_keyslot(0xE, sbk, 0x10);
     
     /* Lock SBK from being read. */
-    se->AES_KEYSLOT_FLAGS[0xE] = 0x7E;
+    se->SE_CRYPTO_KEYTABLE_ACCESS[0xE] = 0x7E;
     
     /* This memset needs to happen here, else TZRAM will behave weirdly later on. */
     memset((void *)0x7C010000, 0, 0x10000);
     
     pmc->crypto_op = 0;
-    se->INT_STATUS_REG = 0x1F;
+    se->SE_INT_STATUS = 0x1F;
     
     /* Lock SSK (although it's not set and unused anyways). */
-    se->AES_KEYSLOT_FLAGS[0xF] = 0x7E;
+    se->SE_CRYPTO_KEYTABLE_ACCESS[0xF] = 0x7E;
     
     /* Clear the boot reason to avoid problems later */
     pmc->scratch200 = 0;

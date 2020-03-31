@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  * Copyright (c) 2019 m4xw <m4x@m4xw.net>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -20,6 +20,12 @@
 #include "se.h"
 #include "kernel_patches.h"
 #include "ips.h"
+
+#define u8 uint8_t
+#define u32 uint32_t
+#include "kernel_ldr_bin.h"
+#undef u8
+#undef u32
 
 #define MAKE_BRANCH(a, o) 0x14000000 | ((((o) - (a)) >> 2) & 0x3FFFFFF)
 #define MAKE_NOP 0xD503201F
@@ -488,6 +494,13 @@ static const instruction_t MAKE_KERNEL_PATCH_NAME(700, svc_control_codememory)[]
 static const instruction_t MAKE_KERNEL_PATCH_NAME(800, svc_control_codememory)[] = {MAKE_NOP};
 static const instruction_t MAKE_KERNEL_PATCH_NAME(900, svc_control_codememory)[] = {MAKE_NOP};
 
+
+static const instruction_t MAKE_KERNEL_PATCH_NAME(500, system_memory_increase)[] = {0x52A3C008}; /* MOV W8,   #0x1E000000 */
+static const instruction_t MAKE_KERNEL_PATCH_NAME(600, system_memory_increase)[] = {0x52A3B008}; /* MOV W8,   #0x1D800000 */
+static const instruction_t MAKE_KERNEL_PATCH_NAME(700, system_memory_increase)[] = {0x52A3B008}; /* MOV W8,   #0x1D800000 */
+static const instruction_t MAKE_KERNEL_PATCH_NAME(800, system_memory_increase)[] = {0x52A3B013}; /* MOV W19,  #0x1D800000 */
+static const instruction_t MAKE_KERNEL_PATCH_NAME(900, system_memory_increase)[] = {0x52A3B013}; /* MOV W19,  #0x1D800000 */
+
 /* Hook Definitions. */
 static const kernel_patch_t g_kernel_patches_100[] = {
     {   /* Send Message Process ID Patch. */
@@ -600,6 +613,11 @@ static const kernel_patch_t g_kernel_patches_500[] = {
         .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(500, svc_control_codememory))/sizeof(instruction_t),
         .payload = MAKE_KERNEL_PATCH_NAME(500, svc_control_codememory),
         .patch_offset = 0x38C2C,
+    },
+    {   /* System Memory Increase Patch. */
+        .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(500, system_memory_increase))/sizeof(instruction_t),
+        .payload = MAKE_KERNEL_PATCH_NAME(500, system_memory_increase),
+        .patch_offset = 0x54E30,
     }
 };
 static const kernel_patch_t g_kernel_patches_600[] = {
@@ -623,6 +641,11 @@ static const kernel_patch_t g_kernel_patches_600[] = {
         .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(600, svc_control_codememory))/sizeof(instruction_t),
         .payload = MAKE_KERNEL_PATCH_NAME(600, svc_control_codememory),
         .patch_offset = 0x3A8CC,
+    },
+    {   /* System Memory Increase Patch. */
+        .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(600, system_memory_increase))/sizeof(instruction_t),
+        .payload = MAKE_KERNEL_PATCH_NAME(600, system_memory_increase),
+        .patch_offset = 0x57330,
     }
 };
 static const kernel_patch_t g_kernel_patches_700[] = {
@@ -646,6 +669,11 @@ static const kernel_patch_t g_kernel_patches_700[] = {
         .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(700, svc_control_codememory))/sizeof(instruction_t),
         .payload = MAKE_KERNEL_PATCH_NAME(700, svc_control_codememory),
         .patch_offset = 0x3C6E0,
+    },
+    {   /* System Memory Increase Patch. */
+        .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(700, system_memory_increase))/sizeof(instruction_t),
+        .payload = MAKE_KERNEL_PATCH_NAME(700, system_memory_increase),
+        .patch_offset = 0x57F98,
     }
 };
 
@@ -670,6 +698,11 @@ static const kernel_patch_t g_kernel_patches_800[] = {
         .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(800, svc_control_codememory))/sizeof(instruction_t),
         .payload = MAKE_KERNEL_PATCH_NAME(800, svc_control_codememory),
         .patch_offset = 0x3FAD0,
+    },
+    {   /* System Memory Increase Patch. */
+        .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(800, system_memory_increase))/sizeof(instruction_t),
+        .payload = MAKE_KERNEL_PATCH_NAME(800, system_memory_increase),
+        .patch_offset = 0x5F9A4,
     }
 };
 
@@ -694,6 +727,11 @@ static const kernel_patch_t g_kernel_patches_900[] = {
         .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(900, svc_control_codememory))/sizeof(instruction_t),
         .payload = MAKE_KERNEL_PATCH_NAME(900, svc_control_codememory),
         .patch_offset = 0x43DFC,
+    },
+    {   /* System Memory Increase Patch. */
+        .payload_num_instructions = sizeof(MAKE_KERNEL_PATCH_NAME(900, system_memory_increase))/sizeof(instruction_t),
+        .payload = MAKE_KERNEL_PATCH_NAME(900, system_memory_increase),
+        .patch_offset = 0x6493C,
     }
 };
 
@@ -763,6 +801,16 @@ static const kernel_info_t g_kernel_infos[] = {
         .embedded_ini_ptr = 0x180,
         .free_code_space_offset = 0x65780,
         KERNEL_PATCHES(900)
+    },
+    {   /* 9.2.0. */
+        /* NOTE: 9.2.0 has identical kernel layout to 9.0.0, so patches may be reused. */
+        .hash = {0x66, 0xE7, 0x73, 0xE7, 0xF5, 0xCB, 0x9B, 0xB8, 0x66, 0xB7, 0xB1, 0x26, 0x23, 0x02, 0x76, 0xF2, 0xD1, 0x60, 0x3E, 0x09, 0x14, 0x19, 0xC2, 0x84, 0xFA, 0x5D, 0x0F, 0x16, 0xA3, 0x65, 0xFA, 0x17},
+        .hash_offset = 0x1C0,
+        .hash_size = 0x90000 - 0x1C0,
+        .embedded_ini_offset = 0x90000,
+        .embedded_ini_ptr = 0x180,
+        .free_code_space_offset = 0x65780,
+        KERNEL_PATCHES(900)
     }
 };
 
@@ -807,12 +855,12 @@ const kernel_info_t *get_kernel_info(void *kernel, size_t size) {
     return NULL;
 }
 
-void package2_patch_kernel(void *_kernel, size_t size, bool is_sd_kernel, void **out_ini1) {
-    const kernel_info_t *kernel_info = get_kernel_info(_kernel, size);
+void package2_patch_kernel(void *_kernel, size_t *kernel_size, bool is_sd_kernel, void **out_ini1) {
+    const kernel_info_t *kernel_info = get_kernel_info(_kernel, *kernel_size);
     *out_ini1 = NULL;
 
     /* Apply IPS patches. */
-    apply_kernel_ips_patches(_kernel, size);
+    apply_kernel_ips_patches(_kernel, *kernel_size);
 
     if (kernel_info == NULL && !is_sd_kernel) {
         /* Should this be fatal? */
@@ -824,8 +872,16 @@ void package2_patch_kernel(void *_kernel, size_t size, bool is_sd_kernel, void *
     }
 
     if (kernel_info->embedded_ini_offset != 0) {
+        /* Copy in our kernel loader. */
+        const uint32_t kernel_ldr_offset = *((volatile uint64_t *)((uintptr_t)_kernel + kernel_info->embedded_ini_ptr + 8));
+        memcpy((void *)((uintptr_t)_kernel + kernel_ldr_offset), kernel_ldr_bin, kernel_ldr_bin_size);
+
+        /* Update size. */
+        *kernel_size = kernel_ldr_offset + kernel_ldr_bin_size;
+
+        /* Set output INI ptr. */
         *out_ini1 = (void *)((uintptr_t)_kernel + kernel_info->embedded_ini_offset);
-        *((volatile uint64_t *)((uintptr_t)_kernel + kernel_info->embedded_ini_ptr)) = (uint64_t)size;
+        *((volatile uint64_t *)((uintptr_t)_kernel + kernel_info->embedded_ini_ptr)) = (uint64_t)*kernel_size;
     }
 
     /* Apply hooks and patches. */
@@ -850,7 +906,7 @@ void package2_patch_kernel(void *_kernel, size_t size, bool is_sd_kernel, void *
             fatal_error("kernel_patcher: insufficient space to apply patches!\n");
         }
 
-        uint8_t *pattern_loc = search_pattern(kernel, size, kernel_info->patches[i].pattern, kernel_info->patches[i].pattern_size);
+        uint8_t *pattern_loc = search_pattern(kernel, *kernel_size, kernel_info->patches[i].pattern, kernel_info->patches[i].pattern_size);
         if (pattern_loc == NULL) {
             /* TODO: Should we print an error/abort here? */
             continue;

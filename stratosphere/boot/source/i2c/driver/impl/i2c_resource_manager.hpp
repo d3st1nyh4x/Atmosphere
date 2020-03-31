@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,17 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "../i2c_api.hpp"
 #include "i2c_driver_types.hpp"
 #include "i2c_bus_accessor.hpp"
 #include "i2c_session.hpp"
 
-namespace sts::i2c::driver::impl {
+namespace ams::i2c::driver::impl {
 
     class ResourceManager {
         public:
@@ -31,14 +27,14 @@ namespace sts::i2c::driver::impl {
             static constexpr size_t PowerBusId = ConvertToIndex(Bus::I2C5);
             static constexpr size_t InvalidSessionId = static_cast<size_t>(-1);
         private:
-            HosMutex initialize_mutex;
-            HosMutex session_open_mutex;
+            os::Mutex initialize_mutex;
+            os::Mutex session_open_mutex;
             size_t ref_cnt = 0;
             bool suspended = false;
             bool power_bus_suspended = false;
             Session sessions[MaxDriverSessions];
             BusAccessor bus_accessors[ConvertToIndex(Bus::Count)];
-            HosMutex transaction_mutexes[ConvertToIndex(Bus::Count)];
+            os::Mutex transaction_mutexes[ConvertToIndex(Bus::Count)];
         public:
             ResourceManager() {
                 /* ... */
@@ -60,7 +56,7 @@ namespace sts::i2c::driver::impl {
                 return this->sessions[id];
             }
 
-            HosMutex& GetTransactionMutex(Bus bus) {
+            os::Mutex& GetTransactionMutex(Bus bus) {
                 return this->transaction_mutexes[ConvertToIndex(bus)];
             }
 

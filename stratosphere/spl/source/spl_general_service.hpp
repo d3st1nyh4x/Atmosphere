@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,15 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
-#include <stratosphere/spl/spl_types.hpp>
 
-namespace sts::spl {
+namespace ams::spl {
 
-    class GeneralService : public IServiceObject {
+    class GeneralService : public sf::IServiceObject {
         protected:
             enum class CommandId {
                 /* 1.0.0+ */
@@ -32,6 +29,7 @@ namespace sts::spl {
                 GenerateAesKey                 = 4,
                 SetConfig                      = 5,
                 GenerateRandomBytes            = 7,
+                ImportLotusKeyDeprecated       = 9,
                 ImportLotusKey                 = 9,
                 DecryptLotusMessage            = 10,
                 IsDevelopment                  = 11,
@@ -41,6 +39,7 @@ namespace sts::spl {
                 DecryptAesKey                  = 14,
                 CryptAesCtr                    = 15,
                 ComputeCmac                    = 16,
+                ImportEsKeyDeprecated          = 17,
                 ImportEsKey                    = 17,
                 UnwrapTitleKey                 = 18,
                 LoadTitleKey                   = 19,
@@ -72,22 +71,22 @@ namespace sts::spl {
             virtual ~GeneralService() { /* ... */ }
         protected:
             /* Actual commands. */
-            virtual Result GetConfig(Out<u64> out, u32 which);
-            virtual Result ExpMod(OutPointerWithClientSize<u8> out, InPointer<u8> base, InPointer<u8> exp, InPointer<u8> mod);
+            virtual Result GetConfig(sf::Out<u64> out, u32 which);
+            virtual Result ExpMod(const sf::OutPointerBuffer &out, const sf::InPointerBuffer &base, const sf::InPointerBuffer &exp, const sf::InPointerBuffer &mod);
             virtual Result SetConfig(u32 which, u64 value);
-            virtual Result GenerateRandomBytes(OutPointerWithClientSize<u8> out);
-            virtual Result IsDevelopment(Out<bool> is_dev);
+            virtual Result GenerateRandomBytes(const sf::OutPointerBuffer &out);
+            virtual Result IsDevelopment(sf::Out<bool> is_dev);
             virtual Result SetBootReason(BootReasonValue boot_reason);
-            virtual Result GetBootReason(Out<BootReasonValue> out);
+            virtual Result GetBootReason(sf::Out<BootReasonValue> out);
         public:
             DEFINE_SERVICE_DISPATCH_TABLE {
-                MAKE_SERVICE_COMMAND_META(GeneralService, GetConfig),
-                MAKE_SERVICE_COMMAND_META(GeneralService, ExpMod),
-                MAKE_SERVICE_COMMAND_META(GeneralService, SetConfig),
-                MAKE_SERVICE_COMMAND_META(GeneralService, GenerateRandomBytes),
-                MAKE_SERVICE_COMMAND_META(GeneralService, IsDevelopment),
-                MAKE_SERVICE_COMMAND_META(GeneralService, SetBootReason,        FirmwareVersion_300),
-                MAKE_SERVICE_COMMAND_META(GeneralService, GetBootReason,        FirmwareVersion_300),
+                MAKE_SERVICE_COMMAND_META(GetConfig),
+                MAKE_SERVICE_COMMAND_META(ExpMod),
+                MAKE_SERVICE_COMMAND_META(SetConfig),
+                MAKE_SERVICE_COMMAND_META(GenerateRandomBytes),
+                MAKE_SERVICE_COMMAND_META(IsDevelopment),
+                MAKE_SERVICE_COMMAND_META(SetBootReason,        hos::Version_300),
+                MAKE_SERVICE_COMMAND_META(GetBootReason,        hos::Version_300),
             };
     };
 

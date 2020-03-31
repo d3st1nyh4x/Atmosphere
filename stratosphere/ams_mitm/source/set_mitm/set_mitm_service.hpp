@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,56 +13,43 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
 #include <stratosphere.hpp>
 
-#include "../utils.hpp"
+namespace ams::mitm::settings {
 
-class SetMitmService : public IMitmServiceObject {
-    private:
-        enum class CommandId {
-            GetLanguageCode = 0,
-            GetRegionCode   = 4,
+    class SetMitmService  : public sf::IMitmServiceObject {
+        private:
+            enum class CommandId {
+                GetLanguageCode = 0,
+                GetRegionCode   = 4,
+            };
+        private:
+            os::Mutex lock;
+            cfg::OverrideLocale locale;
+            bool got_locale;
+        public:
+            static bool ShouldMitm(const sm::MitmProcessInfo &client_info) {
+                /* We will mitm:
+                 * - ns and games, to allow for overriding game locales.
+                 */
+                const bool is_game = (ncm::IsApplicationId(client_info.program_id) && !client_info.override_status.IsHbl());
+                return client_info.program_id == ncm::SystemProgramId::Ns || is_game;
+            }
+        public:
+            SF_MITM_SERVICE_OBJECT_CTOR(SetMitmService) {
+                this->got_locale = false;
+            }
+        private:
+            Result EnsureLocale();
+        protected:
+            Result GetLanguageCode(sf::Out<ams::settings::LanguageCode> out);
+            Result GetRegionCode(sf::Out<ams::settings::RegionCode> out);
+        public:
+            DEFINE_SERVICE_DISPATCH_TABLE {
+                MAKE_SERVICE_COMMAND_META(GetLanguageCode),
+                MAKE_SERVICE_COMMAND_META(GetRegionCode),
+            };
+    };
 
-            /* Commands for which set:sys *must* act as a passthrough. */
-            /* TODO: Solve the relevant IPC detection problem. */
-            GetAvailableLanguageCodes = 1,
-        };
-    private:
-        HosMutex lock;
-        OverrideLocale locale;
-        bool got_locale;
-    public:
-        SetMitmService(std::shared_ptr<Service> s, u64 pid, sts::ncm::TitleId tid) : IMitmServiceObject(s, pid, tid) {
-            this->got_locale = false;
-        }
-
-        static bool ShouldMitm(u64 pid, sts::ncm::TitleId tid) {
-            /* Mitm all applications. */
-            return tid == sts::ncm::TitleId::Ns || sts::ncm::IsApplicationTitleId(tid);
-        }
-
-        static void PostProcess(IMitmServiceObject *obj, IpcResponseContext *ctx);
-
-    protected:
-        static bool IsValidLanguageCode(u64 lang_code);
-        static bool IsValidRegionCode(u32 region_code);
-
-        Result EnsureLocale();
-    protected:
-        /* Overridden commands. */
-        Result GetLanguageCode(Out<u64> out_lang_code);
-        Result GetRegionCode(Out<u32> out_region_code);
-
-        /* Forced passthrough commands. */
-        Result GetAvailableLanguageCodes(OutPointerWithClientSize<u64> out_language_codes, Out<s32> out_count);
-    public:
-        DEFINE_SERVICE_DISPATCH_TABLE {
-            MAKE_SERVICE_COMMAND_META(SetMitmService, GetLanguageCode),
-            MAKE_SERVICE_COMMAND_META(SetMitmService, GetRegionCode),
-
-            MAKE_SERVICE_COMMAND_META(SetMitmService, GetAvailableLanguageCodes),
-        };
-};
+}

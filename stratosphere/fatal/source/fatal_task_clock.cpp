@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,16 +13,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "fatal_task_clock.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
 
     namespace {
 
         /* Task definition. */
-        class AdjustClockTask : public ITask {
+        class AdjustClockTask : public ITaskWithDefaultStack {
             private:
                 Result AdjustClockForModule(PcvModule module, u32 hz);
                 Result AdjustClock();
@@ -38,7 +37,7 @@ namespace sts::fatal::srv {
 
         /* Task implementation. */
         Result AdjustClockTask::AdjustClockForModule(PcvModule module, u32 hz) {
-            if (GetRuntimeFirmwareVersion() >= FirmwareVersion_800) {
+            if (hos::GetVersion() >= hos::Version_800) {
                 /* On 8.0.0+, convert to module id + use clkrst API. */
                 PcvModuleId module_id;
                 R_TRY(pcvGetModuleId(&module_id, module));
@@ -53,7 +52,7 @@ namespace sts::fatal::srv {
                 R_TRY(pcvSetClockRate(module, hz));
             }
 
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result AdjustClockTask::AdjustClock() {
@@ -66,7 +65,7 @@ namespace sts::fatal::srv {
             R_TRY(AdjustClockForModule(PcvModule_GPU,    GPU_CLOCK_307MHZ));
             R_TRY(AdjustClockForModule(PcvModule_EMC,    EMC_CLOCK_1331MHZ));
 
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result AdjustClockTask::Run() {

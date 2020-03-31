@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,12 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "boot_clock_initial_configuration.hpp"
 #include "boot_pmc_wrapper.hpp"
 #include "boot_registers_pmc.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     namespace {
 
@@ -31,7 +30,7 @@ namespace sts::boot {
 
     void SetInitialClockConfiguration() {
         /* Write mask to APBDEV_PMC_PWR_DET, then clear APBDEV_PMC_PWR_DET_VAL. */
-        const u32 mask = GetRuntimeFirmwareVersion() >= FirmwareVersion_600 ? InitialClockOutMask6x : InitialClockOutMask1x;
+        const u32 mask = hos::GetVersion() >= hos::Version_600 ? InitialClockOutMask6x : InitialClockOutMask1x;
         WritePmcRegister(PmcClkOutCntrl, mask, mask);
     }
 

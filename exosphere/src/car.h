@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -51,7 +51,8 @@ void rst_disable(CarDevice dev);
 
 void clkrst_enable(CarDevice dev);
 void clkrst_disable(CarDevice dev);
-
 void clkrst_reboot(CarDevice dev);
+
+void clkrst_enable_fuse_regs(bool enable);
 
 #endif

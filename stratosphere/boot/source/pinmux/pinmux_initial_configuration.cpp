@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,13 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <stratosphere/spl.hpp>
-
 #include "pinmux_initial_configuration.hpp"
 #include "pinmux_utils.hpp"
 
-namespace sts::pinmux {
+namespace ams::pinmux {
 
     namespace {
 
@@ -34,7 +31,10 @@ namespace sts::pinmux {
 #include "pinmux_initial_configuration_copper.inc"
 #include "pinmux_initial_configuration_hoag.inc"
 #include "pinmux_initial_configuration_iowa.inc"
+#include "pinmux_initial_configuration_calcio.inc"
+
 #include "pinmux_initial_drive_pad_configuration.inc"
+#include "pinmux_initial_drive_pad_configuration_hoag.inc"
 
 
         /* Configuration helpers. */
@@ -45,49 +45,72 @@ namespace sts::pinmux {
 
             switch (hw_type) {
                 case spl::HardwareType::Icosa:
-                    configs = InitialConfigsIcosa;
+                    configs     = InitialConfigsIcosa;
                     num_configs = NumInitialConfigsIcosa;
                     break;
                 case spl::HardwareType::Copper:
-                    configs = InitialConfigsCopper;
+                    configs     = InitialConfigsCopper;
                     num_configs = NumInitialConfigsCopper;
                     break;
                 case spl::HardwareType::Hoag:
-                    configs = InitialConfigsHoag;
+                    configs     = InitialConfigsHoag;
                     num_configs = NumInitialConfigsHoag;
                     break;
                 case spl::HardwareType::Iowa:
-                    configs = InitialConfigsIowa;
+                    configs     = InitialConfigsIowa;
                     num_configs = NumInitialConfigsIowa;
                     break;
-                default:
-                    /* Unknown hardware type, we can't proceed. */
-                    std::abort();
+                case spl::HardwareType::Calcio:
+                    configs     = InitialConfigsCalcio;
+                    num_configs = NumInitialConfigsCalcio;
+                    break;
+                /* Unknown hardware type, we can't proceed. */
+                AMS_UNREACHABLE_DEFAULT_CASE();
             }
 
             /* Ensure we found an appropriate config. */
-            if (configs == nullptr) {
-                std::abort();
-            }
+            AMS_ABORT_UNLESS(configs != nullptr);
 
             for (size_t i = 0; i < num_configs; i++) {
                 UpdatePad(configs[i].name, configs[i].val, configs[i].mask);
             }
 
-            /* Extra configs for iowa only. */
-            if (hw_type == spl::HardwareType::Iowa) {
-                static constexpr u32 ExtraIowaPadNames[] = {
+            /* Extra configs for mariko only. */
+            if (hw_type == spl::HardwareType::Hoag || hw_type == spl::HardwareType::Iowa || hw_type == spl::HardwareType::Calcio) {
+                static constexpr u32 ExtraMarikoPadNames[] = {
                     0xAA, 0xAC, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9
                 };
-                for (size_t i = 0; i < util::size(ExtraIowaPadNames); i++) {
-                    UpdatePad(ExtraIowaPadNames[i], 0x2000, 0x2000);
+                for (size_t i = 0; i < util::size(ExtraMarikoPadNames); i++) {
+                    UpdatePad(ExtraMarikoPadNames[i], 0x2000, 0x2000);
                 }
             }
         }
 
         void ConfigureInitialDrivePads() {
-            const InitialConfig *configs = InitialDrivePadConfigs;
-            for (size_t i = 0; i < NumInitialDrivePadConfigs; i++) {
+            const InitialConfig *configs = nullptr;
+            size_t num_configs = 0;
+            const auto hw_type = spl::GetHardwareType();
+
+            switch (hw_type) {
+                case spl::HardwareType::Icosa:
+                case spl::HardwareType::Copper:
+                case spl::HardwareType::Iowa:
+                case spl::HardwareType::Calcio:
+                    configs     = InitialDrivePadConfigs;
+                    num_configs = NumInitialDrivePadConfigs;
+                    break;
+                case spl::HardwareType::Hoag:
+                    configs     = InitialDrivePadConfigsHoag;
+                    num_configs = NumInitialDrivePadConfigsHoag;
+                    break;
+                /* Unknown hardware type, we can't proceed. */
+                AMS_UNREACHABLE_DEFAULT_CASE();
+            }
+
+            /* Ensure we found an appropriate config. */
+            AMS_ABORT_UNLESS(configs != nullptr);
+
+            for (size_t i = 0; i < num_configs; i++) {
                 UpdateDrivePad(configs[i].name, configs[i].val, configs[i].mask);
             }
         }

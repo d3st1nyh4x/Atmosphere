@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,11 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <unordered_map>
 #include "fatal_debug.hpp"
 #include "fatal_config.hpp"
 
-namespace sts::fatal::srv {
+namespace ams::fatal::srv {
 
     namespace {
 
@@ -28,7 +27,7 @@ namespace sts::fatal::srv {
             u64 lr;
         };
 
-        bool IsThreadFatalCaller(u32 error_code, u32 debug_handle, u64 thread_id, u64 thread_tls_addr, ThreadContext *thread_ctx) {
+        bool IsThreadFatalCaller(Result result, u32 debug_handle, u64 thread_id, u64 thread_tls_addr, ThreadContext *thread_ctx) {
             /* Verify that the thread is running or waiting. */
             {
                 u64 _;
@@ -38,7 +37,7 @@ namespace sts::fatal::srv {
                 }
 
                 const svc::ThreadState thread_state = static_cast<svc::ThreadState>(_thread_state);
-                if (thread_state != svc::ThreadState::Waiting && thread_state != svc::ThreadState::Running) {
+                if (thread_state != svc::ThreadState_Waiting && thread_state != svc::ThreadState_Running) {
                     return false;
                 }
             }
@@ -65,40 +64,54 @@ namespace sts::fatal::srv {
                 return false;
             }
 
-            /* HACK: We want to parse the command the fatal caller sent. */
-            /* The easiest way to do this is to copy their TLS over ours, and parse ours. */
-            std::memcpy(armGetTls(), thread_tls, sizeof(thread_tls));
+            /* We want to parse the command the fatal caller sent. */
             {
-                IpcParsedCommand r;
-                if (R_FAILED(ipcParse(&r))) {
-                    return false;
-                }
+                const auto request = hipcParseRequest(thread_tls);
+
+                const struct {
+                    CmifInHeader header;
+                    Result result;
+                } *in_data = decltype(in_data)(request.data.data_words);
+                static_assert(sizeof(*in_data) == 0x14, "InData!");
 
                 /* Fatal command takes in a PID, only one buffer max. */
-                if (!r.HasPid || r.NumStatics || r.NumStaticsOut || r.NumHandles) {
+                if ((request.meta.type != CmifCommandType_Request && request.meta.type != CmifCommandType_RequestWithContext) ||
+                    !request.meta.send_pid ||
+                    request.meta.num_send_statics ||
+                    request.meta.num_recv_statics ||
+                    request.meta.num_recv_buffers ||
+                    request.meta.num_exch_buffers ||
+                    request.meta.num_copy_handles ||
+                    request.meta.num_move_handles ||
+                    request.meta.num_data_words < ((sizeof(*in_data) + 0x10) / sizeof(u32)))
+                {
                     return false;
                 }
 
-                struct {
-                    u32 magic;
-                    u32 version;
-                    u64 cmd_id;
-                    u32 err_code;
-                } *raw = (decltype(raw))(r.Raw);
-
-                if (raw->magic != SFCI_MAGIC) {
+                if (in_data->header.magic != CMIF_IN_HEADER_MAGIC) {
                     return false;
                 }
 
-                if (raw->cmd_id > 2) {
+                if (in_data->header.version > 1) {
                     return false;
                 }
 
-                if (raw->cmd_id != 2 && r.NumBuffers) {
-                    return false;
+                switch (in_data->header.command_id) {
+                    case 0:
+                    case 1:
+                        if (request.meta.num_send_buffers != 0) {
+                            return false;
+                        }
+                        break;
+                    case 2:
+                        if (request.meta.num_send_buffers != 1) {
+                            return false;
+                        }
+                    default:
+                        return false;
                 }
 
-                if (raw->err_code != error_code) {
+                if (in_data->result.GetValue() != result.GetValue()) {
                     return false;
                 }
             }
@@ -154,10 +167,10 @@ namespace sts::fatal::srv {
 
     }
 
-    void TryCollectDebugInformation(ThrowContext *ctx, u64 process_id) {
+    void TryCollectDebugInformation(ThrowContext *ctx, os::ProcessId process_id) {
         /* Try to debug the process. This may fail, if we called into ourself. */
-        AutoHandle debug_handle;
-        if (R_FAILED(svcDebugActiveProcess(debug_handle.GetPointer(), process_id))) {
+        os::ManagedHandle debug_handle;
+        if (R_FAILED(svcDebugActiveProcess(debug_handle.GetPointer(), static_cast<u64>(process_id)))) {
             return;
         }
 
@@ -168,17 +181,17 @@ namespace sts::fatal::srv {
             svc::DebugEventInfo d;
             while (R_SUCCEEDED(svcGetDebugEvent(reinterpret_cast<u8 *>(&d), debug_handle.Get()))) {
                 switch (d.type) {
-                    case svc::DebugEventType::AttachProcess:
+                    case svc::DebugEvent_AttachProcess:
                         ctx->cpu_ctx.architecture = (d.info.attach_process.flags & 1) ? CpuContext::Architecture_Aarch64 : CpuContext::Architecture_Aarch32;
                         std::memcpy(ctx->proc_name, d.info.attach_process.name, sizeof(d.info.attach_process.name));
                         got_attach_process = true;
                         break;
-                    case svc::DebugEventType::AttachThread:
+                    case svc::DebugEvent_AttachThread:
                         thread_id_to_tls[d.info.attach_thread.thread_id] = d.info.attach_thread.tls_address;
                         break;
-                    case svc::DebugEventType::Exception:
-                    case svc::DebugEventType::ExitProcess:
-                    case svc::DebugEventType::ExitThread:
+                    case svc::DebugEvent_Exception:
+                    case svc::DebugEvent_ExitProcess:
+                    case svc::DebugEvent_ExitThread:
                         break;
                 }
             }
@@ -196,24 +209,26 @@ namespace sts::fatal::srv {
         /* Welcome to hell. Here, we try to identify which thread called into fatal. */
         bool found_fatal_caller = false;
         u64 thread_id = 0;
+        u64 thread_tls = 0;
         ThreadContext thread_ctx;
         {
             /* We start by trying to get a list of threads. */
-            u32 thread_count;
+            s32 thread_count;
             u64 thread_ids[0x60];
-            if (R_FAILED(svcGetThreadList(&thread_count, thread_ids, 0x60, debug_handle.Get()))) {
+            if (R_FAILED(svc::GetThreadList(&thread_count, thread_ids, 0x60, debug_handle.Get()))) {
                 return;
             }
 
             /* We need to locate the thread that's called fatal. */
-            for (u32 i = 0; i < thread_count; i++) {
+            for (s32 i = 0; i < thread_count; i++) {
                 const u64 cur_thread_id = thread_ids[i];
                 if (thread_id_to_tls.find(cur_thread_id) == thread_id_to_tls.end()) {
                     continue;
                 }
 
-                if (IsThreadFatalCaller(ctx->error_code, debug_handle.Get(), cur_thread_id, thread_id_to_tls[cur_thread_id], &thread_ctx)) {
+                if (IsThreadFatalCaller(ctx->result, debug_handle.Get(), cur_thread_id, thread_id_to_tls[cur_thread_id], &thread_ctx)) {
                     thread_id = cur_thread_id;
+                    thread_tls = thread_id_to_tls[thread_id];
                     found_fatal_caller = true;
                     break;
                 }
@@ -253,11 +268,21 @@ namespace sts::fatal::srv {
         }
 
         /* Try to read up to 0x100 of stack. */
+        ctx->stack_dump_base = 0;
         for (size_t sz = 0x100; sz > 0; sz -= 0x10) {
             if (R_SUCCEEDED(svcReadDebugProcessMemory(ctx->stack_dump, debug_handle.Get(), thread_ctx.sp, sz))) {
+                ctx->stack_dump_base = thread_ctx.sp;
                 ctx->stack_dump_size = sz;
                 break;
             }
+        }
+
+        /* Try to read the first 0x100 of TLS. */
+        if (R_SUCCEEDED(svcReadDebugProcessMemory(ctx->tls_dump, debug_handle.Get(), thread_tls, sizeof(ctx->tls_dump)))) {
+            ctx->tls_address = thread_tls;
+        } else {
+            ctx->tls_address = 0;
+            std::memset(ctx->tls_dump, 0xCC, sizeof(ctx->tls_dump));
         }
 
         /* Parse the base address. */

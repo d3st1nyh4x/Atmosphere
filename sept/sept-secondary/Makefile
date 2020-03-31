@@ -29,7 +29,7 @@ TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
 SOURCES		:=	src src/sdmmc src/lib src/lib/fatfs src/display
 DATA		:=	data
-INCLUDES	:=	include  ../../common/include
+INCLUDES	:=	include  ../../libraries/libvapours/include
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -131,6 +131,8 @@ else
 	@touch $(TOPDIR)/$(TARGET).bin
 	@cp $(SEPT_00_ENC_PATH) $(TOPDIR)/$(TARGET)_00.enc
 	@cp $(SEPT_01_ENC_PATH) $(TOPDIR)/$(TARGET)_01.enc
+	@cp $(SEPT_DEV_00_ENC_PATH) $(TOPDIR)/$(TARGET)_dev_00.enc
+	@cp $(SEPT_DEV_01_ENC_PATH) $(TOPDIR)/$(TARGET)_dev_01.enc
 endif
 
 #---------------------------------------------------------------------------------
@@ -143,17 +145,23 @@ clean:
 
 #---------------------------------------------------------------------------------
 else
-.PHONY:	all $(OUTPUT).bin
+.PHONY:	all
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
 #---------------------------------------------------------------------------------
 # main targets
 #---------------------------------------------------------------------------------
-all	:	$(OUTPUT).enc
+all	:	$(OUTPUT)_dev_01.enc
 
-$(OUTPUT).enc	:	$(OUTPUT).bin
-	@python $(TOPDIR)/sept_sign.py $< $@
+$(OUTPUT)_dev_01.enc	:	$(OUTPUT)_dev_00.enc
+
+$(OUTPUT)_dev_00.enc	:	$(OUTPUT)_01.enc
+
+$(OUTPUT)_01.enc	:	$(OUTPUT)_00.enc
+
+$(OUTPUT)_00.enc	:	$(OUTPUT).bin
+	@python $(TOPDIR)/sept_sign.py $(OUTPUT).bin $(OUTPUT).enc
 	@echo built ... $(notdir $@)
 
 $(OUTPUT).bin	:	$(OUTPUT).elf

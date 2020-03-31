@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,19 +13,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <stratosphere/spl.hpp>
-#include <stratosphere/updater.hpp>
-
 #include "boot_power_utils.hpp"
 #include "boot_repair_boot_images.hpp"
 
-namespace sts::boot {
+namespace ams::boot {
 
     namespace {
 
         /* Globals. */
-        u8 __attribute__((aligned(0x1000))) g_boot_image_work_buffer[0x10000];
+        alignas(os::MemoryPageSize) u8 g_boot_image_work_buffer[0x10000];
 
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -19,7 +19,7 @@
 #include "gpio_initial_configuration.hpp"
 #include "gpio_utils.hpp"
 
-namespace sts::gpio {
+namespace ams::gpio {
 
     namespace {
 
@@ -34,6 +34,7 @@ namespace sts::gpio {
 #include "gpio_initial_configuration_copper.inc"
 #include "gpio_initial_configuration_hoag.inc"
 #include "gpio_initial_configuration_iowa.inc"
+#include "gpio_initial_configuration_calcio.inc"
 
     }
 
@@ -41,48 +42,49 @@ namespace sts::gpio {
         const InitialConfig *configs = nullptr;
         size_t num_configs = 0;
         const auto hw_type = spl::GetHardwareType();
-        const FirmwareVersion fw_ver = GetRuntimeFirmwareVersion();
+        const auto hos_ver = hos::GetVersion();
 
         /* Choose GPIO map. */
-        if (fw_ver >= FirmwareVersion_200) {
+        if (hos_ver >= hos::Version_200) {
             switch (hw_type) {
                 case spl::HardwareType::Icosa:
                     {
-                        if (fw_ver >= FirmwareVersion_400) {
-                            configs = InitialConfigsIcosa4x;
+                        if (hos_ver >= hos::Version_400) {
+                            configs     = InitialConfigsIcosa4x;
                             num_configs = NumInitialConfigsIcosa4x;
                         } else {
-                            configs = InitialConfigsIcosa;
+                            configs     = InitialConfigsIcosa;
                             num_configs = NumInitialConfigsIcosa;
                         }
                     }
                     break;
                 case spl::HardwareType::Copper:
-                    configs = InitialConfigsCopper;
+                    configs     = InitialConfigsCopper;
                     num_configs = NumInitialConfigsCopper;
                     break;
                 case spl::HardwareType::Hoag:
-                    configs = InitialConfigsHoag;
+                    configs     = InitialConfigsHoag;
                     num_configs = NumInitialConfigsHoag;
                     break;
                 case spl::HardwareType::Iowa:
-                    configs = InitialConfigsIowa;
+                    configs     = InitialConfigsIowa;
                     num_configs = NumInitialConfigsIowa;
                     break;
-                default:
-                    /* Unknown hardware type, we can't proceed. */
-                    std::abort();
+                case spl::HardwareType::Calcio:
+                    configs     = InitialConfigsCalcio;
+                    num_configs = NumInitialConfigsCalcio;
+                    break;
+                /* Unknown hardware type, we can't proceed. */
+                AMS_UNREACHABLE_DEFAULT_CASE();
             }
         } else {
             /* Until 2.0.0, the GPIO map for Icosa was used for all hardware types. */
-            configs = InitialConfigsIcosa;
+            configs     = InitialConfigsIcosa;
             num_configs = NumInitialConfigsIcosa;
         }
 
         /* Ensure we found an appropriate config. */
-        if (configs == nullptr) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(configs != nullptr);
 
         for (size_t i = 0; i < num_configs; i++) {
             /* Configure the GPIO. */

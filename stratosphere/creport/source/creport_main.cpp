@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,15 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <cstdlib>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <malloc.h>
-
-#include <switch.h>
-#include <stratosphere.hpp>
 #include "creport_crash_report.hpp"
 #include "creport_utils.hpp"
 
@@ -30,8 +21,9 @@ extern "C" {
     extern u32 __start__;
 
     u32 __nx_applet_type = AppletType_None;
+    u32 __nx_fs_num_sessions = 1;
 
-    #define INNER_HEAP_SIZE 0x100000
+    #define INNER_HEAP_SIZE 0x4000
     size_t nx_inner_heap_size = INNER_HEAP_SIZE;
     char   nx_inner_heap[INNER_HEAP_SIZE];
 
@@ -40,18 +32,28 @@ extern "C" {
     void __appExit(void);
 
     /* Exception handling. */
-    alignas(16) u8 __nx_exception_stack[0x1000];
+    alignas(16) u8 __nx_exception_stack[ams::os::MemoryPageSize];
     u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
     void __libnx_exception_handler(ThreadExceptionDump *ctx);
-    void __libstratosphere_exception_handler(AtmosphereFatalErrorContext *ctx);
 }
 
-sts::ncm::TitleId __stratosphere_title_id = sts::ncm::TitleId::Creport;
+namespace ams {
+
+    ncm::ProgramId CurrentProgramId = ncm::SystemProgramId::Creport;
+
+    namespace result {
+
+        bool CallFatalOnResultAssertion = true;
+
+    }
+
+}
+
+using namespace ams;
 
 void __libnx_exception_handler(ThreadExceptionDump *ctx) {
-    StratosphereCrashHandler(ctx);
+    ams::CrashHandler(ctx);
 }
-
 
 void __libnx_initheap(void) {
 	void*  addr = nx_inner_heap;
@@ -66,22 +68,21 @@ void __libnx_initheap(void) {
 }
 
 void __appInit(void) {
-    SetFirmwareVersionForLibnx();
+    hos::SetVersionForLibnx();
 
-    DoWithSmSession([&]() {
-        R_ASSERT(fsInitialize());
+    sm::DoWithSession([&]() {
+        R_ABORT_UNLESS(fsInitialize());
     });
 
-    R_ASSERT(fsdevMountSdmc());
+    R_ABORT_UNLESS(fs::MountSdCard("sdmc"));
 }
 
 void __appExit(void) {
     /* Cleanup services. */
-    fsdevUnmountAll();
     fsExit();
 }
 
-static sts::creport::CrashReport g_Creport;
+static creport::CrashReport g_crash_report;
 
 int main(int argc, char **argv) {
     /* Validate arguments. */
@@ -95,28 +96,28 @@ int main(int argc, char **argv) {
     }
 
     /* Parse crashed PID. */
-    u64 crashed_pid = sts::creport::ParseProcessIdArgument(argv[0]);
+    os::ProcessId crashed_pid = creport::ParseProcessIdArgument(argv[0]);
 
     /* Try to debug the crashed process. */
-    g_Creport.BuildReport(crashed_pid, argv[1][0] == '1');
-    if (!g_Creport.IsComplete()) {
+    g_crash_report.BuildReport(crashed_pid, argv[1][0] == '1');
+    if (!g_crash_report.IsComplete()) {
         return EXIT_FAILURE;
     }
 
     /* Save report to file. */
-    g_Creport.SaveReport();
+    g_crash_report.SaveReport();
 
     /* Try to terminate the process. */
     {
-        sts::sm::ScopedServiceHolder<nsdevInitialize, nsdevExit> ns_holder;
+        sm::ScopedServiceHolder<nsdevInitialize, nsdevExit> ns_holder;
         if (ns_holder) {
-            nsdevTerminateProcess(crashed_pid);
+            nsdevTerminateProcess(static_cast<u64>(crashed_pid));
         }
     }
 
     /* Don't fatal if we have extra info, or if we're 5.0.0+ and an application crashed. */
-    if (GetRuntimeFirmwareVersion() >= FirmwareVersion_500) {
-        if (g_Creport.IsApplication()) {
+    if (hos::GetVersion() >= hos::Version_500) {
+        if (g_crash_report.IsApplication()) {
             return EXIT_SUCCESS;
         }
     } else if (argv[1][0] == '1') {
@@ -124,12 +125,12 @@ int main(int argc, char **argv) {
     }
 
     /* Also don't fatal if we're a user break. */
-    if (g_Creport.IsUserBreak()) {
+    if (g_crash_report.IsUserBreak()) {
         return EXIT_SUCCESS;
     }
 
     /* Throw fatal error. */
-    FatalContext ctx;
-    g_Creport.GetFatalContext(&ctx);
-    fatalWithContext(g_Creport.GetResult(), FatalType_ErrorScreen, &ctx);
+    ::FatalCpuContext ctx;
+    g_crash_report.GetFatalContext(&ctx);
+    fatalThrowWithContext(g_crash_report.GetResult().GetValue(), FatalPolicy_ErrorScreen, &ctx);
 }

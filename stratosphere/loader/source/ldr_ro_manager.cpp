@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,11 +13,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <stratosphere/ro.hpp>
 #include "ldr_ro_manager.hpp"
 
-namespace sts::ldr::ro {
+namespace ams::ldr::ro {
 
     namespace {
 
@@ -34,15 +32,17 @@ namespace sts::ldr::ro {
 
         struct ProcessInfo {
             PinId pin_id;
-            u64 process_id;
-            ncm::TitleId title_id;
-            ncm::TitleLocation loc;
+            os::ProcessId process_id;
+            ncm::ProgramId program_id;
+            cfg::OverrideStatus override_status;
+            ncm::ProgramLocation loc;
             ModuleInfo modules[ModuleCountMax];
             bool in_use;
         };
 
         /* Globals. */
         ProcessInfo g_process_infos[ProcessCountMax];
+        u64 g_cur_pin_id = 1;
 
         /* Helpers. */
         ProcessInfo *GetProcessInfo(PinId pin_id) {
@@ -55,7 +55,7 @@ namespace sts::ldr::ro {
             return nullptr;
         }
 
-        ProcessInfo *GetProcessInfo(u64 process_id) {
+        ProcessInfo *GetProcessInfo(os::ProcessId process_id) {
             for (size_t i = 0; i < ProcessCountMax; i++) {
                 ProcessInfo *info = &g_process_infos[i];
                 if (info->in_use && info->process_id == process_id) {
@@ -78,60 +78,50 @@ namespace sts::ldr::ro {
     }
 
     /* RO Manager API. */
-    Result PinTitle(PinId *out, const ncm::TitleLocation &loc) {
+    Result PinProgram(PinId *out, const ncm::ProgramLocation &loc, const cfg::OverrideStatus &status) {
         *out = InvalidPinId;
         ProcessInfo *info = GetFreeProcessInfo();
-        if (info == nullptr) {
-            return ResultLoaderTooManyProcesses;
-        }
-
-        static u64 s_cur_pin_id = 1;
+        R_UNLESS(info != nullptr, ldr::ResultTooManyProcesses());
 
         std::memset(info, 0, sizeof(*info));
-        info->pin_id = { s_cur_pin_id++ };
+        info->pin_id = { g_cur_pin_id++ };
         info->loc = loc;
+        info->override_status = status;
         info->in_use = true;
         *out = info->pin_id;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
-    Result UnpinTitle(PinId id) {
+    Result UnpinProgram(PinId id) {
         ProcessInfo *info = GetProcessInfo(id);
-        if (info == nullptr) {
-            return ResultLoaderNotPinned;
-        }
+        R_UNLESS(info != nullptr, ldr::ResultNotPinned());
 
         info->in_use = false;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
 
-    Result GetTitleLocation(ncm::TitleLocation *out, PinId id) {
+    Result GetProgramLocationAndStatus(ncm::ProgramLocation *out, cfg::OverrideStatus *out_status, PinId id) {
         ProcessInfo *info = GetProcessInfo(id);
-        if (info == nullptr) {
-            return ResultLoaderNotPinned;
-        }
+        R_UNLESS(info != nullptr, ldr::ResultNotPinned());
 
         *out = info->loc;
-        return ResultSuccess;
+        *out_status = info->override_status;
+        return ResultSuccess();
     }
 
-    Result RegisterProcess(PinId id, u64 process_id, ncm::TitleId title_id) {
+    Result RegisterProcess(PinId id, os::ProcessId process_id, ncm::ProgramId program_id) {
         ProcessInfo *info = GetProcessInfo(id);
-        if (info == nullptr) {
-            return ResultLoaderNotPinned;
-        }
+        R_UNLESS(info != nullptr, ldr::ResultNotPinned());
 
-        info->title_id = title_id;
+        info->program_id = program_id;
         info->process_id = process_id;
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     Result RegisterModule(PinId id, const u8 *build_id, uintptr_t address, size_t size) {
         ProcessInfo *info = GetProcessInfo(id);
-        if (info == nullptr) {
-            return ResultLoaderNotPinned;
-        }
+        R_UNLESS(info != nullptr, ldr::ResultNotPinned());
 
         /* Nintendo doesn't actually care about successful allocation. */
         for (size_t i = 0; i < ModuleCountMax; i++) {
@@ -147,14 +137,12 @@ namespace sts::ldr::ro {
             break;
         }
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
-    Result GetProcessModuleInfo(u32 *out_count, ldr::ModuleInfo *out, size_t max_out_count, u64 process_id) {
+    Result GetProcessModuleInfo(u32 *out_count, ldr::ModuleInfo *out, size_t max_out_count, os::ProcessId process_id) {
         const ProcessInfo *info = GetProcessInfo(process_id);
-        if (info == nullptr) {
-            return ResultLoaderNotPinned;
-        }
+        R_UNLESS(info != nullptr, ldr::ResultNotPinned());
 
         size_t count = 0;
         for (size_t i = 0; i < ModuleCountMax && count < max_out_count; i++) {
@@ -167,7 +155,7 @@ namespace sts::ldr::ro {
         }
 
         *out_count = static_cast<u32>(count);
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
 }

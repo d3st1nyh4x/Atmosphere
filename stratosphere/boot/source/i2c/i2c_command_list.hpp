@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,14 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #pragma once
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c_types.hpp"
 
-namespace sts::i2c {
+namespace ams::i2c {
 
     enum class Command {
         Send = 0,
@@ -43,9 +39,7 @@ namespace sts::i2c {
             size_t cur_index = 0;
         public:
             CommandListFormatter(void *cmd_list, size_t cmd_list_size) : cmd_list(static_cast<u8 *>(cmd_list)), cmd_list_size(cmd_list_size) {
-                if (cmd_list_size > MaxCommandListSize) {
-                    std::abort();
-                }
+                AMS_ABORT_UNLESS(cmd_list_size <= MaxCommandListSize);
             }
             ~CommandListFormatter() {
                 this->cmd_list = nullptr;

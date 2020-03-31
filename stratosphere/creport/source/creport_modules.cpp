@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,11 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 #include "creport_modules.hpp"
 #include "creport_utils.hpp"
 
-namespace sts::creport {
+namespace ams::creport {
 
     namespace {
 
@@ -40,18 +39,21 @@ namespace sts::creport {
         };
         static_assert(sizeof(RoDataStart) == sizeof(ModulePath), "RoDataStart definition!");
 
+        /* Globals. */
+        u8 g_last_rodata_pages[2 * os::MemoryPageSize];
+
     }
 
-    void ModuleList::SaveToFile(FILE *f_report) {
-        fprintf(f_report, "    Number of Modules:           %zu\n", this->num_modules);
+    void ModuleList::SaveToFile(ScopedFile &file) {
+        file.WriteFormat("    Number of Modules:           %zu\n", this->num_modules);
         for (size_t i = 0; i < this->num_modules; i++) {
             const auto& module = this->modules[i];
-            fprintf(f_report, "    Module %02zu:\n", i);
-            fprintf(f_report, "        Address:                 %016lx-%016lx\n", module.start_address, module.end_address);
+            file.WriteFormat("    Module %02zu:\n", i);
+            file.WriteFormat("        Address:                 %016lx-%016lx\n", module.start_address, module.end_address);
             if (std::strcmp(this->modules[i].name, "") != 0) {
-                fprintf(f_report, "        Name:                    %s\n", module.name);
+                file.WriteFormat("        Name:                    %s\n", module.name);
             }
-            DumpMemoryHexToFile(f_report,  "        Build Id:                ", module.build_id, sizeof(module.build_id));
+            file.DumpMemory("        Build Id:                ", &module.build_id[0], sizeof(module.build_id));
         }
     }
 
@@ -230,16 +232,15 @@ namespace sts::creport {
         }
 
         /* We want to read the last two pages of .rodata. */
-        static u8 s_last_rodata_pages[2 * 0x1000];
-        const size_t read_size = mi.size >= sizeof(s_last_rodata_pages) ? sizeof(s_last_rodata_pages) : (sizeof(s_last_rodata_pages) / 2);
-        if (R_FAILED(svcReadDebugProcessMemory(s_last_rodata_pages, this->debug_handle, mi.addr + mi.size - read_size, read_size))) {
+        const size_t read_size = mi.size >= sizeof(g_last_rodata_pages) ? sizeof(g_last_rodata_pages) : (sizeof(g_last_rodata_pages) / 2);
+        if (R_FAILED(svcReadDebugProcessMemory(g_last_rodata_pages, this->debug_handle, mi.addr + mi.size - read_size, read_size))) {
             return;
         }
 
         /* Find GNU\x00 to locate start of build id. */
         for (int ofs = read_size - sizeof(GnuSignature) - ModuleBuildIdLength; ofs >= 0; ofs--) {
-            if (std::memcmp(s_last_rodata_pages + ofs, GnuSignature, sizeof(GnuSignature)) == 0) {
-                std::memcpy(out_build_id, s_last_rodata_pages + ofs + sizeof(GnuSignature), ModuleBuildIdLength);
+            if (std::memcmp(g_last_rodata_pages + ofs, GnuSignature, sizeof(GnuSignature)) == 0) {
+                std::memcpy(out_build_id, g_last_rodata_pages + ofs + sizeof(GnuSignature), ModuleBuildIdLength);
                 break;
             }
         }

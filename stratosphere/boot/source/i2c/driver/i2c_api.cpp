@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,14 +13,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "i2c_api.hpp"
 #include "impl/i2c_resource_manager.hpp"
 
-namespace sts::i2c::driver {
+namespace ams::i2c::driver {
 
     namespace {
 
@@ -40,7 +36,7 @@ namespace sts::i2c::driver {
             R_TRY(Send(session, *cur_cmd, num_bytes, option));
             (*cur_cmd) += num_bytes;
 
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result ReceiveHandler(const u8 **cur_cmd, u8 **cur_dst, Session& session) {
@@ -55,7 +51,7 @@ namespace sts::i2c::driver {
             R_TRY(Receive(session, *cur_dst, num_bytes, option));
             (*cur_dst) += num_bytes;
 
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         Result SubCommandHandler(const u8 **cur_cmd, u8 **cur_dst, Session& session) {
@@ -70,10 +66,9 @@ namespace sts::i2c::driver {
                         svcSleepThread(us * 1'000ul);
                     }
                     break;
-                default:
-                    std::abort();
+                AMS_UNREACHABLE_DEFAULT_CASE();
             }
-            return ResultSuccess;
+            return ResultSuccess();
         }
 
         /* Command handler list. */
@@ -88,9 +83,7 @@ namespace sts::i2c::driver {
         }
 
         inline void CheckInitialized() {
-            if (!GetResourceManager().IsInitialized()) {
-                std::abort();
-            }
+            AMS_ABORT_UNLESS(GetResourceManager().IsInitialized());
         }
 
     }
@@ -107,9 +100,7 @@ namespace sts::i2c::driver {
     /* Session management. */
     void OpenSession(Session *out_session, I2cDevice device) {
         CheckInitialized();
-        if (!impl::IsDeviceSupported(device)) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(impl::IsDeviceSupported(device));
 
         const auto bus = impl::GetDeviceBus(device);
         const auto slave_address = impl::GetDeviceSlaveAddress(device);
@@ -128,29 +119,26 @@ namespace sts::i2c::driver {
     /* Communication. */
     Result Send(Session &session, const void *src, size_t size, I2cTransactionOption option) {
         CheckInitialized();
-        if (src == nullptr || size == 0) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(src != nullptr);
+        AMS_ABORT_UNLESS(size > 0);
 
-        std::scoped_lock<HosMutex &> lk(GetResourceManager().GetTransactionMutex(impl::ConvertFromIndex(session.bus_idx)));
+        std::scoped_lock<os::Mutex &> lk(GetResourceManager().GetTransactionMutex(impl::ConvertFromIndex(session.bus_idx)));
         return GetResourceManager().GetSession(session.session_id).DoTransactionWithRetry(nullptr, src, size, option, impl::Command::Send);
     }
 
     Result Receive(Session &session, void *dst, size_t size, I2cTransactionOption option) {
         CheckInitialized();
-        if (dst == nullptr || size == 0) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(dst != nullptr);
+        AMS_ABORT_UNLESS(size > 0);
 
-        std::scoped_lock<HosMutex &> lk(GetResourceManager().GetTransactionMutex(impl::ConvertFromIndex(session.bus_idx)));
+        std::scoped_lock<os::Mutex &> lk(GetResourceManager().GetTransactionMutex(impl::ConvertFromIndex(session.bus_idx)));
         return GetResourceManager().GetSession(session.session_id).DoTransactionWithRetry(dst, nullptr, size, option, impl::Command::Receive);
     }
 
     Result ExecuteCommandList(Session &session, void *dst, size_t size, const void *cmd_list, size_t cmd_list_size) {
         CheckInitialized();
-        if (dst == nullptr || size == 0 || cmd_list == nullptr || cmd_list_size == 0) {
-            std::abort();
-        }
+        AMS_ABORT_UNLESS(dst != nullptr && size > 0);
+        AMS_ABORT_UNLESS(cmd_list != nullptr && cmd_list_size > 0);
 
         u8 *cur_dst = static_cast<u8 *>(dst);
         const u8 *cur_cmd = static_cast<const u8 *>(cmd_list);
@@ -158,14 +146,12 @@ namespace sts::i2c::driver {
 
         while (cur_cmd < cmd_list_end) {
             Command cmd = static_cast<Command>((*cur_cmd) & 3);
-            if (cmd >= Command::Count) {
-                std::abort();
-            }
+            AMS_ABORT_UNLESS(cmd < Command::Count);
 
             R_TRY(g_cmd_handlers[static_cast<size_t>(cmd)](&cur_cmd, &cur_dst, session));
         }
 
-        return ResultSuccess;
+        return ResultSuccess();
     }
 
     /* Power management. */

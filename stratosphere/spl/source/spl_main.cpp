@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Atmosphère-NX
+ * Copyright (c) 2018-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -13,15 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include <cstdlib>
-#include <cstdint>
-#include <cstring>
-#include <malloc.h>
-
-#include <switch.h>
-#include <stratosphere.hpp>
-
 #include "spl_api_impl.hpp"
 
 #include "spl_random_service.hpp"
@@ -39,7 +30,7 @@ extern "C" {
 
     u32 __nx_applet_type = AppletType_None;
 
-    #define INNER_HEAP_SIZE 0x28000
+    #define INNER_HEAP_SIZE 0x4000
     size_t nx_inner_heap_size = INNER_HEAP_SIZE;
     char   nx_inner_heap[INNER_HEAP_SIZE];
 
@@ -48,18 +39,28 @@ extern "C" {
     void __appExit(void);
 
     /* Exception handling. */
-    alignas(16) u8 __nx_exception_stack[0x1000];
+    alignas(16) u8 __nx_exception_stack[ams::os::MemoryPageSize];
     u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
     void __libnx_exception_handler(ThreadExceptionDump *ctx);
-    void __libstratosphere_exception_handler(AtmosphereFatalErrorContext *ctx);
 }
 
-sts::ncm::TitleId __stratosphere_title_id = sts::ncm::TitleId::Spl;
+namespace ams {
+
+    ncm::ProgramId CurrentProgramId = ncm::SystemProgramId::Spl;
+
+    namespace result {
+
+        bool CallFatalOnResultAssertion = false;
+
+    }
+
+}
+
+using namespace ams;
 
 void __libnx_exception_handler(ThreadExceptionDump *ctx) {
-    StratosphereCrashHandler(ctx);
+    ams::CrashHandler(ctx);
 }
-
 
 void __libnx_initheap(void) {
     void*  addr = nx_inner_heap;
@@ -74,46 +75,80 @@ void __libnx_initheap(void) {
 }
 
 void __appInit(void) {
-    SetFirmwareVersionForLibnx();
+    hos::SetVersionForLibnx();
 
     /* SPL doesn't really access any services... */
+
+    ams::CheckApiVersion();
 }
 
 void __appExit(void) {
     /* SPL doesn't really access any services... */
 }
 
-struct SplServerOptions {
-    static constexpr size_t PointerBufferSize = 0x800;
-    static constexpr size_t MaxDomains = 0;
-    static constexpr size_t MaxDomainObjects = 0;
-};
+namespace {
+
+    struct SplServerOptions {
+        static constexpr size_t PointerBufferSize = 0x800;
+        static constexpr size_t MaxDomains = 0;
+        static constexpr size_t MaxDomainObjects = 0;
+    };
+
+    constexpr sm::ServiceName RandomServiceName = sm::ServiceName::Encode("csrng");
+    constexpr size_t          RandomMaxSessions = 3;
+
+    constexpr sm::ServiceName DeprecatedServiceName = sm::ServiceName::Encode("spl:");
+    constexpr size_t          DeprecatedMaxSessions = 12;
+
+    constexpr sm::ServiceName GeneralServiceName = sm::ServiceName::Encode("spl:");
+    constexpr size_t          GeneralMaxSessions = 6;
+
+    constexpr sm::ServiceName CryptoServiceName = sm::ServiceName::Encode("spl:mig");
+    constexpr size_t          CryptoMaxSessions = 6;
+
+    constexpr sm::ServiceName SslServiceName = sm::ServiceName::Encode("spl:ssl");
+    constexpr size_t          SslMaxSessions = 2;
+
+    constexpr sm::ServiceName EsServiceName = sm::ServiceName::Encode("spl:es");
+    constexpr size_t          EsMaxSessions = 2;
+
+    constexpr sm::ServiceName FsServiceName = sm::ServiceName::Encode("spl:fs");
+    constexpr size_t          FsMaxSessions = 3;
+
+    constexpr sm::ServiceName ManuServiceName = sm::ServiceName::Encode("spl:manu");
+    constexpr size_t          ManuMaxSessions = 1;
+
+    /* csrng, spl:, spl:mig, spl:ssl, spl:es, spl:fs, spl:manu. */
+    /* TODO: Consider max sessions enforcement? */
+    constexpr size_t NumServers  = 7;
+    constexpr size_t ModernMaxSessions = GeneralMaxSessions + CryptoMaxSessions + SslMaxSessions + EsMaxSessions + FsMaxSessions + ManuMaxSessions;
+    constexpr size_t NumSessions = RandomMaxSessions + std::max(DeprecatedMaxSessions, ModernMaxSessions) + 1;
+    sf::hipc::ServerManager<NumServers, SplServerOptions, NumSessions> g_server_manager;
+
+}
 
 int main(int argc, char **argv)
 {
     /* Initialize global context. */
-    sts::spl::impl::Initialize();
-
-    /* Create server manager. */
-    static auto s_server_manager = WaitableManager<SplServerOptions>(1);
+    spl::impl::Initialize();
 
     /* Create services. */
-    s_server_manager.AddWaitable(new ServiceServer<sts::spl::RandomService>("csrng", 3));
-    if (GetRuntimeFirmwareVersion() >= FirmwareVersion_400) {
-        s_server_manager.AddWaitable(new ServiceServer<sts::spl::GeneralService>("spl:", 9));
-        s_server_manager.AddWaitable(new ServiceServer<sts::spl::CryptoService>("spl:mig", 6));
-        s_server_manager.AddWaitable(new ServiceServer<sts::spl::SslService>("spl:ssl", 2));
-        s_server_manager.AddWaitable(new ServiceServer<sts::spl::EsService>("spl:es", 2));
-        s_server_manager.AddWaitable(new ServiceServer<sts::spl::FsService>("spl:fs", 3));
-        if (GetRuntimeFirmwareVersion() >= FirmwareVersion_500) {
-            s_server_manager.AddWaitable(new ServiceServer<sts::spl::ManuService>("spl:manu", 1));
+    R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::RandomService>(RandomServiceName, RandomMaxSessions));
+    if (hos::GetVersion() >= hos::Version_400) {
+        R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::GeneralService>(GeneralServiceName, GeneralMaxSessions));
+        R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::CryptoService>(CryptoServiceName, CryptoMaxSessions));
+        R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::SslService>(SslServiceName, SslMaxSessions));
+        R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::EsService>(EsServiceName, EsMaxSessions));
+        R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::FsService>(FsServiceName, FsMaxSessions));
+        if (hos::GetVersion() >= hos::Version_500) {
+            R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::ManuService>(ManuServiceName, ManuMaxSessions));
         }
     } else {
-        s_server_manager.AddWaitable(new ServiceServer<sts::spl::DeprecatedService>("spl:", 12));
+        R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::DeprecatedService>(DeprecatedServiceName, DeprecatedMaxSessions));
     }
 
     /* Loop forever, servicing our services. */
-    s_server_manager.Process();
+    g_server_manager.LoopProcess();
 
     return 0;
 }
