@@ -79,6 +79,7 @@ dist-no-debug: all
 	cp config_templates/override_config.ini shrekmosphere-$(AMSVER)/atmosphere/config_templates/override_config.ini
 	cp config_templates/system_settings.ini shrekmosphere-$(AMSVER)/atmosphere/config_templates/system_settings.ini
 	cp -r config_templates/kip_patches shrekmosphere-$(AMSVER)/atmosphere/kip_patches
+	cp -r config_templates/exefs_patches shrekmosphere-$(AMSVER)/atmosphere/exefs_patches
 	cp -r config_templates/hbl_html shrekmosphere-$(AMSVER)/atmosphere/hbl_html
 	cp stratosphere/boot2/boot2.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000008/exefs.nsp
 	cp stratosphere/dmnt/dmnt.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/010000000000000D/exefs.nsp
@@ -108,34 +109,34 @@ dist: dist-no-debug
 		| tr -s [:blank:] \
 		| cut -d' ' -f3))
 	$(eval AMSVER = $(MAJORVER).$(MINORVER).$(MICROVER)-$(AMSREV))
-	rm -rf atmosphere-$(AMSVER)-debug
-	mkdir atmosphere-$(AMSVER)-debug
-	cp fusee/fusee-primary/fusee-primary.elf atmosphere-$(AMSVER)-debug/fusee-primary.elf
-	cp fusee/fusee-mtc/fusee-mtc.elf atmosphere-$(AMSVER)-debug/fusee-mtc.elf
-	cp fusee/fusee-secondary/fusee-secondary.elf atmosphere-$(AMSVER)-debug/fusee-secondary.elf
-	cp sept/sept-primary/sept-primary.elf atmosphere-$(AMSVER)-debug/sept-primary.elf
-	cp sept/sept-secondary/sept-secondary.elf atmosphere-$(AMSVER)-debug/sept-secondary.elf
-	cp sept/sept-secondary/key_derivation/key_derivation.elf atmosphere-$(AMSVER)-debug/sept-secondary-key-derivation.elf
-	cp exosphere/exosphere.elf atmosphere-$(AMSVER)-debug/exosphere.elf
-	cp exosphere/lp0fw/lp0fw.elf atmosphere-$(AMSVER)-debug/lp0fw.elf
-	cp exosphere/sc7fw/sc7fw.elf atmosphere-$(AMSVER)-debug/sc7fw.elf
-	cp exosphere/rebootstub/rebootstub.elf atmosphere-$(AMSVER)-debug/rebootstub.elf
-	cp mesosphere/kernel_ldr/kernel_ldr.elf atmosphere-$(AMSVER)-debug/kernel_ldr.elf
-	cp stratosphere/ams_mitm/ams_mitm.elf atmosphere-$(AMSVER)-debug/ams_mitm.elf
-	cp stratosphere/boot/boot.elf atmosphere-$(AMSVER)-debug/boot.elf
-	cp stratosphere/boot2/boot2.elf atmosphere-$(AMSVER)-debug/boot2.elf
-	cp stratosphere/creport/creport.elf atmosphere-$(AMSVER)-debug/creport.elf
-	cp stratosphere/dmnt/dmnt.elf atmosphere-$(AMSVER)-debug/dmnt.elf
-	cp stratosphere/eclct.stub/eclct.stub.elf atmosphere-$(AMSVER)-debug/eclct.stub.elf
-	cp stratosphere/fatal/fatal.elf atmosphere-$(AMSVER)-debug/fatal.elf
-	cp stratosphere/loader/loader.elf atmosphere-$(AMSVER)-debug/loader.elf
-	cp stratosphere/pm/pm.elf atmosphere-$(AMSVER)-debug/pm.elf
-	cp stratosphere/ro/ro.elf atmosphere-$(AMSVER)-debug/ro.elf
-	cp stratosphere/sm/sm.elf atmosphere-$(AMSVER)-debug/sm.elf
-	cp stratosphere/spl/spl.elf atmosphere-$(AMSVER)-debug/spl.elf
-	cd atmosphere-$(AMSVER)-debug; zip -r ../atmosphere-$(AMSVER)-debug.zip ./*; cd ../;
-	rm -r atmosphere-$(AMSVER)-debug
-	mv atmosphere-$(AMSVER)-debug.zip out/atmosphere-$(AMSVER)-debug.zip
+	rm -rf shrekmosphere-$(AMSVER)-debug
+	mkdir shrekmosphere-$(AMSVER)-debug
+	cp fusee/fusee-primary/fusee-primary.elf shrekmosphere-$(AMSVER)-debug/fusee-primary.elf
+	cp fusee/fusee-mtc/fusee-mtc.elf shrekmosphere-$(AMSVER)-debug/fusee-mtc.elf
+	cp fusee/fusee-secondary/fusee-secondary.elf shrekmosphere-$(AMSVER)-debug/fusee-secondary.elf
+	cp sept/sept-primary/sept-primary.elf shrekmosphere-$(AMSVER)-debug/sept-primary.elf
+	cp sept/sept-secondary/sept-secondary.elf shrekmosphere-$(AMSVER)-debug/sept-secondary.elf
+	cp sept/sept-secondary/key_derivation/key_derivation.elf shrekmosphere-$(AMSVER)-debug/sept-secondary-key-derivation.elf
+	cp exosphere/exosphere.elf shrekmosphere-$(AMSVER)-debug/exosphere.elf
+	cp exosphere/lp0fw/lp0fw.elf shrekmosphere-$(AMSVER)-debug/lp0fw.elf
+	cp exosphere/sc7fw/sc7fw.elf shrekmosphere-$(AMSVER)-debug/sc7fw.elf
+	cp exosphere/rebootstub/rebootstub.elf shrekmosphere-$(AMSVER)-debug/rebootstub.elf
+	cp mesosphere/kernel_ldr/kernel_ldr.elf shrekmosphere-$(AMSVER)-debug/kernel_ldr.elf
+	cp stratosphere/ams_mitm/ams_mitm.elf shrekmosphere-$(AMSVER)-debug/ams_mitm.elf
+	cp stratosphere/boot/boot.elf shrekmosphere-$(AMSVER)-debug/boot.elf
+	cp stratosphere/boot2/boot2.elf shrekmosphere-$(AMSVER)-debug/boot2.elf
+	cp stratosphere/creport/creport.elf shrekmosphere-$(AMSVER)-debug/creport.elf
+	cp stratosphere/dmnt/dmnt.elf shrekmosphere-$(AMSVER)-debug/dmnt.elf
+	cp stratosphere/eclct.stub/eclct.stub.elf shrekmosphere-$(AMSVER)-debug/eclct.stub.elf
+	cp stratosphere/fatal/fatal.elf shrekmosphere-$(AMSVER)-debug/fatal.elf
+	cp stratosphere/loader/loader.elf shrekmosphere-$(AMSVER)-debug/loader.elf
+	cp stratosphere/pm/pm.elf shrekmosphere-$(AMSVER)-debug/pm.elf
+	cp stratosphere/ro/ro.elf shrekmosphere-$(AMSVER)-debug/ro.elf
+	cp stratosphere/sm/sm.elf shrekmosphere-$(AMSVER)-debug/sm.elf
+	cp stratosphere/spl/spl.elf shrekmosphere-$(AMSVER)-debug/spl.elf
+	cd shrekmosphere-$(AMSVER)-debug; zip -r ../shrekmosphere-$(AMSVER)-debug.zip ./*; cd ../;
+	rm -r shrekmosphere-$(AMSVER)-debug
+	mv shrekmosphere-$(AMSVER)-debug.zip out/shrekmosphere-$(AMSVER)-debug.zip
 
 
 .PHONY: $(TOPTARGETS) $(COMPONENTS)
