@@ -80,6 +80,7 @@ dist-no-debug: all
 	cp config_templates/override_config.ini shrekmosphere-$(AMSVER)/atmosphere/config_templates/override_config.ini
 	cp config_templates/system_settings.ini shrekmosphere-$(AMSVER)/atmosphere/config_templates/system_settings.ini
 	cp -r config_templates/kip_patches shrekmosphere-$(AMSVER)/atmosphere/kip_patches
+	cp -r config_templates/exefs_patches shrekmosphere-$(AMSVER)/atmosphere/exefs_patches
 	cp -r config_templates/hbl_html shrekmosphere-$(AMSVER)/atmosphere/hbl_html
 	cp stratosphere/boot2/boot2.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000008/exefs.nsp
 	cp stratosphere/dmnt/dmnt.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/010000000000000D/exefs.nsp
