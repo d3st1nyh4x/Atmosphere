@@ -58,6 +58,7 @@ dist-no-debug: all
 	mkdir shrekmosphere-$(AMSVER)/switch
 	mkdir -p shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000008
 	mkdir -p shrekmosphere-$(AMSVER)/atmosphere/contents/010000000000000D
+	mkdir -p shrekmosphere-$(AMSVER)/atmosphere/contents/010000000000002B
 	mkdir -p shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000032
 	mkdir -p shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000034
 	mkdir -p shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000036
@@ -79,10 +80,10 @@ dist-no-debug: all
 	cp config_templates/override_config.ini shrekmosphere-$(AMSVER)/atmosphere/config_templates/override_config.ini
 	cp config_templates/system_settings.ini shrekmosphere-$(AMSVER)/atmosphere/config_templates/system_settings.ini
 	cp -r config_templates/kip_patches shrekmosphere-$(AMSVER)/atmosphere/kip_patches
-	cp -r config_templates/exefs_patches shrekmosphere-$(AMSVER)/atmosphere/exefs_patches
 	cp -r config_templates/hbl_html shrekmosphere-$(AMSVER)/atmosphere/hbl_html
 	cp stratosphere/boot2/boot2.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000008/exefs.nsp
 	cp stratosphere/dmnt/dmnt.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/010000000000000D/exefs.nsp
+	cp stratosphere/erpt/erpt.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/010000000000002B/exefs.nsp
 	cp stratosphere/eclct.stub/eclct.stub.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000032/exefs.nsp
 	cp stratosphere/fatal/fatal.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000034/exefs.nsp
 	cp stratosphere/creport/creport.nsp shrekmosphere-$(AMSVER)/atmosphere/contents/0100000000000036/exefs.nsp
@@ -109,6 +110,7 @@ dist: dist-no-debug
 		| tr -s [:blank:] \
 		| cut -d' ' -f3))
 	$(eval AMSVER = $(MAJORVER).$(MINORVER).$(MICROVER)-$(AMSREV))
+
 	rm -rf shrekmosphere-$(AMSVER)-debug
 	mkdir shrekmosphere-$(AMSVER)-debug
 	cp fusee/fusee-primary/fusee-primary.elf shrekmosphere-$(AMSVER)-debug/fusee-primary.elf
@@ -134,9 +136,11 @@ dist: dist-no-debug
 	cp stratosphere/ro/ro.elf shrekmosphere-$(AMSVER)-debug/ro.elf
 	cp stratosphere/sm/sm.elf shrekmosphere-$(AMSVER)-debug/sm.elf
 	cp stratosphere/spl/spl.elf shrekmosphere-$(AMSVER)-debug/spl.elf
+	cp stratosphere/erpt/erpt.elf shrekmosphere-$(AMSVER)-debug/erpt.elf
 	cd shrekmosphere-$(AMSVER)-debug; zip -r ../shrekmosphere-$(AMSVER)-debug.zip ./*; cd ../;
 	rm -r shrekmosphere-$(AMSVER)-debug
 	mv shrekmosphere-$(AMSVER)-debug.zip out/shrekmosphere-$(AMSVER)-debug.zip
+
 
 
 .PHONY: $(TOPTARGETS) $(COMPONENTS)
