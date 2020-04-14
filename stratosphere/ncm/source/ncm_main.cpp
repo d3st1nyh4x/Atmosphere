@@ -55,15 +55,19 @@ namespace {
     lmem::HeapHandle g_heap_handle;
 
     void *Allocate(size_t size) {
-        return lmem::AllocateFromExpHeap(g_heap_handle, size);
+        void *mem = lmem::AllocateFromExpHeap(g_heap_handle, size);
+        GetHeapState().Allocate(size);
+        return mem;
     }
 
     void Deallocate(void *p, size_t size) {
+        GetHeapState().Free(size);
         lmem::FreeToExpHeap(g_heap_handle, p);
     }
 
     void InitializeHeap() {
         g_heap_handle = lmem::CreateExpHeap(g_heap_memory, sizeof(g_heap_memory), lmem::CreateOption_None);
+        GetHeapState().Initialize(g_heap_handle);
     }
 
 }
@@ -144,14 +148,14 @@ namespace {
 
     constexpr inline sm::ServiceName ContentManagerServiceName = sm::ServiceName::Encode("ncm");
 
+    alignas(os::ThreadStackAlignment) u8 g_content_manager_thread_stack[16_KB];
+    alignas(os::ThreadStackAlignment) u8 g_location_resolver_thread_stack[16_KB];
+
     class ContentManagerServerManager : public sf::hipc::ServerManager<ContentManagerNumServers, ContentManagerServerOptions, ContentManagerMaxSessions> {
         private:
-            static constexpr size_t ThreadStackSize = 0x4000;
-            static constexpr int    ThreadPriority  = 0x15;
-
             using ServiceType = ncm::ContentManagerImpl;
         private:
-            os::StaticThread<ThreadStackSize> thread;
+            os::ThreadType thread;
             std::shared_ptr<ServiceType> ncm_manager;
         private:
             static void ThreadFunction(void *_this) {
@@ -159,7 +163,7 @@ namespace {
             }
         public:
             ContentManagerServerManager(ServiceType *m)
-                : thread(ThreadFunction, this, ThreadPriority), ncm_manager()
+                : ncm_manager()
             {
                 /* ... */
             }
@@ -170,11 +174,13 @@ namespace {
             }
 
             ams::Result StartThreads() {
-                return this->thread.Start();
+                R_TRY(os::CreateThread(std::addressof(this->thread), ThreadFunction, this, g_content_manager_thread_stack, sizeof(g_content_manager_thread_stack), 21));
+                os::StartThread(std::addressof(this->thread));
+                return ResultSuccess();
             }
 
             void Wait() {
-                this->thread.Join();
+                os::WaitThread(std::addressof(this->thread));
             }
     };
 
@@ -193,12 +199,9 @@ namespace {
 
     class LocationResolverServerManager : public sf::hipc::ServerManager<LocationResolverNumServers, LocationResolverServerOptions, LocationResolverMaxSessions> {
         private:
-            static constexpr size_t ThreadStackSize = 0x4000;
-            static constexpr int    ThreadPriority  = 0x15;
-
             using ServiceType = lr::LocationResolverManagerImpl;
         private:
-            os::StaticThread<ThreadStackSize> thread;
+            os::ThreadType thread;
             std::shared_ptr<ServiceType> lr_manager;
         private:
             static void ThreadFunction(void *_this) {
@@ -206,7 +209,7 @@ namespace {
             }
         public:
             LocationResolverServerManager(ServiceType *m)
-                : thread(ThreadFunction, this, ThreadPriority), lr_manager(sf::ServiceObjectTraits<ServiceType>::SharedPointerHelper::GetEmptyDeleteSharedPointer(m))
+                : lr_manager(sf::ServiceObjectTraits<ServiceType>::SharedPointerHelper::GetEmptyDeleteSharedPointer(m))
             {
                 /* ... */
             }
@@ -216,11 +219,13 @@ namespace {
             }
 
             ams::Result StartThreads() {
-                return this->thread.Start();
+                R_TRY(os::CreateThread(std::addressof(this->thread), ThreadFunction, this, g_location_resolver_thread_stack, sizeof(g_location_resolver_thread_stack), 21));
+                os::StartThread(std::addressof(this->thread));
+                return ResultSuccess();
             }
 
             void Wait() {
-                this->thread.Join();
+                os::WaitThread(std::addressof(this->thread));
             }
     };
 

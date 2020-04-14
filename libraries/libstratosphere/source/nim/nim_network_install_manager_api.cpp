@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Adubbz, Atmosphère-NX
+ * Copyright (c) 2019-2020 Atmosphère-NX
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -36,7 +36,7 @@ namespace ams::nim {
     }
 
     /* Service API. */
-    Result DestroySystemUpdateTask(const SystemUpdateTaskId& id) {
+    Result DestroySystemUpdateTask(const SystemUpdateTaskId &id) {
         static_assert(sizeof(SystemUpdateTaskId) == sizeof(::NimSystemUpdateTaskId));
         return nimDestroySystemUpdateTask(reinterpret_cast<const ::NimSystemUpdateTaskId *>(std::addressof(id)));
     }

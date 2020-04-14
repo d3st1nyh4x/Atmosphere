@@ -98,10 +98,10 @@ namespace {
     constexpr size_t          RandomMaxSessions = 3;
 
     constexpr sm::ServiceName DeprecatedServiceName = sm::ServiceName::Encode("spl:");
-    constexpr size_t          DeprecatedMaxSessions = 12;
+    constexpr size_t          DeprecatedMaxSessions = 13;
 
     constexpr sm::ServiceName GeneralServiceName = sm::ServiceName::Encode("spl:");
-    constexpr size_t          GeneralMaxSessions = 6;
+    constexpr size_t          GeneralMaxSessions = 7;
 
     constexpr sm::ServiceName CryptoServiceName = sm::ServiceName::Encode("spl:mig");
     constexpr size_t          CryptoMaxSessions = 6;
@@ -134,13 +134,13 @@ int main(int argc, char **argv)
 
     /* Create services. */
     R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::RandomService>(RandomServiceName, RandomMaxSessions));
-    if (hos::GetVersion() >= hos::Version_400) {
+    if (hos::GetVersion() >= hos::Version_4_0_0) {
         R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::GeneralService>(GeneralServiceName, GeneralMaxSessions));
         R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::CryptoService>(CryptoServiceName, CryptoMaxSessions));
         R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::SslService>(SslServiceName, SslMaxSessions));
         R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::EsService>(EsServiceName, EsMaxSessions));
         R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::FsService>(FsServiceName, FsMaxSessions));
-        if (hos::GetVersion() >= hos::Version_500) {
+        if (hos::GetVersion() >= hos::Version_5_0_0) {
             R_ABORT_UNLESS(g_server_manager.RegisterServer<spl::ManuService>(ManuServiceName, ManuMaxSessions));
         }
     } else {

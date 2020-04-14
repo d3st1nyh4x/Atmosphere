@@ -108,7 +108,14 @@ int main(int argc, char **argv) {
     g_crash_report.SaveReport();
 
     /* Try to terminate the process. */
-    {
+    if (hos::GetVersion() >= hos::Version_10_0_0) {
+        /* On 10.0.0+, use pgl to terminate. */
+        sm::ScopedServiceHolder<pglInitialize, pglExit> pgl_holder;
+        if (pgl_holder) {
+            pglTerminateProcess(static_cast<u64>(crashed_pid));
+        }
+    } else {
+        /* On < 10.0.0, use ns:dev to terminate. */
         sm::ScopedServiceHolder<nsdevInitialize, nsdevExit> ns_holder;
         if (ns_holder) {
             nsdevTerminateProcess(static_cast<u64>(crashed_pid));
@@ -116,7 +123,7 @@ int main(int argc, char **argv) {
     }
 
     /* Don't fatal if we have extra info, or if we're 5.0.0+ and an application crashed. */
-    if (hos::GetVersion() >= hos::Version_500) {
+    if (hos::GetVersion() >= hos::Version_5_0_0) {
         if (g_crash_report.IsApplication()) {
             return EXIT_SUCCESS;
         }

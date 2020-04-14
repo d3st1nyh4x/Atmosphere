@@ -71,11 +71,6 @@ namespace ams::ncm {
             .space_id        = fs::SaveDataSpaceId::SdSystem,
         };
 
-        constexpr size_t MaxBuiltInSystemContentMetaCount = 0x800;
-        constexpr size_t MaxBuiltInUserContentMetaCount   = 0x2000;
-        constexpr size_t MaxSdCardContentMetaCount        = 0x2000;
-        constexpr size_t MaxGameCardContentMetaCount      = 0x800;
-
         using RootPath = kvdb::BoundedString<32>;
 
         inline void ReplaceMountName(char *out_path, const char *mount_name, const char *path) {
@@ -118,11 +113,11 @@ namespace ams::ncm {
 
         ALWAYS_INLINE bool IsSignedSystemPartitionOnSdCardValid(const char *bis_mount_name) {
             /* Signed system partition should never be checked on < 4.0.0, as it did not exist before then. */
-            AMS_ABORT_UNLESS(hos::GetVersion() >= hos::Version_400);
+            AMS_ABORT_UNLESS(hos::GetVersion() >= hos::Version_4_0_0);
 
             /* If we're importing from system on SD, make sure that the signed system partition is valid. */
             const auto version = hos::GetVersion();
-            if (version >= hos::Version_800) {
+            if (version >= hos::Version_8_0_0) {
                 /* On >= 8.0.0, a simpler method was added to check validity. */
                 /* This also works on < 4.0.0 (though the system partition will never be on-sd there), */
                 /* and so this will always return false. */
@@ -161,7 +156,7 @@ namespace ams::ncm {
             R_CATCH(fs::ResultTargetNotFound) {
                 /* On 1.0.0, not all flags existed. Mask when appropriate. */
                 constexpr u32 SaveDataFlags100Mask = fs::SaveDataFlags_KeepAfterResettingSystemSaveData;
-                const u32 flags = (hos::GetVersion() >= hos::Version_200) ? (info.flags) : (info.flags & SaveDataFlags100Mask);
+                const u32 flags = (hos::GetVersion() >= hos::Version_2_0_0) ? (info.flags) : (info.flags & SaveDataFlags100Mask);
                 R_TRY(fs::CreateSystemSaveData(info.space_id, info.id, OwnerId, info.size, info.journal_size, flags));
                 R_TRY(fs::MountSystemSaveData(mount_name, info.space_id, info.id));
             }
@@ -280,7 +275,7 @@ namespace ams::ncm {
     }
 
     Result ContentManagerImpl::BuildContentMetaDatabase(StorageId storage_id) {
-        if (hos::GetVersion() <= hos::Version_400) {
+        if (hos::GetVersion() <= hos::Version_4_0_0) {
             /* Temporarily activate the database. */
             R_TRY(this->ActivateContentMetaDatabase(storage_id));
             ON_SCOPE_EXIT { this->InactivateContentMetaDatabase(storage_id); };
@@ -342,7 +337,7 @@ namespace ams::ncm {
         R_TRY(this->ActivateContentStorage(StorageId::BuiltInSystem));
 
         /* Next, the BuiltInSystem content meta entry. */
-        R_TRY(this->InitializeContentMetaDatabaseRoot(&this->content_meta_database_roots[this->num_content_meta_entries++], StorageId::BuiltInSystem, BuiltInSystemSystemSaveDataInfo, MaxBuiltInSystemContentMetaCount, std::addressof(g_system_content_meta_memory_resource)));
+        R_TRY(this->InitializeContentMetaDatabaseRoot(&this->content_meta_database_roots[this->num_content_meta_entries++], StorageId::BuiltInSystem, BuiltInSystemSystemSaveDataInfo, SystemMaxContentMetaCount, std::addressof(g_system_content_meta_memory_resource)));
 
         if (R_FAILED(this->VerifyContentMetaDatabase(StorageId::BuiltInSystem))) {
             R_TRY(this->CreateContentMetaDatabase(StorageId::BuiltInSystem));
@@ -362,7 +357,7 @@ namespace ams::ncm {
         /* Ensure correct flags on the BuiltInSystem save data. */
         /* NOTE: Nintendo does not check this succeeds, and it does on older system versions. */
         /* We will not check the error, either, even though this kind of defeats the call's purpose. */
-        if (hos::GetVersion() >= hos::Version_200) {
+        if (hos::GetVersion() >= hos::Version_2_0_0) {
             EnsureBuiltInSystemSaveDataFlags();
         }
 
@@ -370,18 +365,18 @@ namespace ams::ncm {
 
         /* Now for BuiltInUser's content storage and content meta entries. */
         R_TRY(this->InitializeContentStorageRoot(&this->content_storage_roots[this->num_content_storage_entries++], StorageId::BuiltInUser, fs::ContentStorageId::User));
-        R_TRY(this->InitializeContentMetaDatabaseRoot(&this->content_meta_database_roots[this->num_content_meta_entries++], StorageId::BuiltInUser, BuiltInUserSystemSaveDataInfo, MaxBuiltInUserContentMetaCount, std::addressof(g_sd_and_user_content_meta_memory_resource)));
+        R_TRY(this->InitializeContentMetaDatabaseRoot(&this->content_meta_database_roots[this->num_content_meta_entries++], StorageId::BuiltInUser, BuiltInUserSystemSaveDataInfo, UserMaxContentMetaCount, std::addressof(g_sd_and_user_content_meta_memory_resource)));
 
         /* Beyond this point, N uses hardcoded indices. */
 
         /* Next SdCard's content storage and content meta entries. */
         R_TRY(this->InitializeContentStorageRoot(&this->content_storage_roots[2], StorageId::SdCard, fs::ContentStorageId::SdCard));
-        R_TRY(this->InitializeContentMetaDatabaseRoot(&this->content_meta_database_roots[2], StorageId::SdCard, SdCardSystemSaveDataInfo, MaxSdCardContentMetaCount, std::addressof(g_sd_and_user_content_meta_memory_resource)));
+        R_TRY(this->InitializeContentMetaDatabaseRoot(&this->content_meta_database_roots[2], StorageId::SdCard, SdCardSystemSaveDataInfo, SdCardMaxContentMetaCount, std::addressof(g_sd_and_user_content_meta_memory_resource)));
 
         /* GameCard's content storage and content meta entries. */
         /* N doesn't set a content storage id for game cards, so we'll just use 0 (System). */
         R_TRY(this->InitializeGameCardContentStorageRoot(&this->content_storage_roots[3]));
-        R_TRY(this->InitializeGameCardContentMetaDatabaseRoot(&this->content_meta_database_roots[3], MaxGameCardContentMetaCount, std::addressof(g_gamecard_content_meta_memory_resource)));
+        R_TRY(this->InitializeGameCardContentMetaDatabaseRoot(&this->content_meta_database_roots[3], GameCardMaxContentMetaCount, std::addressof(g_gamecard_content_meta_memory_resource)));
 
         this->initialized = true;
         return ResultSuccess();
@@ -477,7 +472,7 @@ namespace ams::ncm {
         ContentStorageRoot *root;
         R_TRY(this->GetContentStorageRoot(std::addressof(root), storage_id));
 
-        if (hos::GetVersion() >= hos::Version_200) {
+        if (hos::GetVersion() >= hos::Version_2_0_0) {
             /* Obtain the content storage if already active. */
             R_UNLESS(root->content_storage, GetContentStorageNotActiveResult(storage_id));
         } else {
@@ -498,7 +493,7 @@ namespace ams::ncm {
         ContentMetaDatabaseRoot *root;
         R_TRY(this->GetContentMetaDatabaseRoot(&root, storage_id));
 
-        if (hos::GetVersion() >= hos::Version_200) {
+        if (hos::GetVersion() >= hos::Version_2_0_0) {
             /* Obtain the content meta database if already active. */
             R_UNLESS(root->content_meta_database, GetContentMetaDatabaseNotActiveResult(storage_id));
         } else {
@@ -619,7 +614,7 @@ namespace ams::ncm {
 
         if (storage_id == StorageId::GameCard) {
             /* Initialize the key value store. */
-            R_TRY(root->kvs->Initialize(root->max_content_metas, root->memory_resource->Get()));
+            R_TRY(root->kvs->Initialize(root->max_content_metas, root->memory_resource));
 
             /* Create an on memory content meta database for game cards. */
             root->content_meta_database = std::make_shared<OnMemoryContentMetaDatabaseImpl>(std::addressof(*root->kvs));
@@ -631,7 +626,7 @@ namespace ams::ncm {
             auto mount_guard = SCOPE_GUARD { fs::Unmount(root->mount_name); };
 
             /* Initialize and load the key value store from the filesystem. */
-            R_TRY(root->kvs->Initialize(root->path, root->max_content_metas, root->memory_resource->Get()));
+            R_TRY(root->kvs->Initialize(root->path, root->max_content_metas, root->memory_resource));
             R_TRY(root->kvs->Load());
 
             /* Create the content meta database. */
@@ -667,6 +662,38 @@ namespace ams::ncm {
 
     Result ContentManagerImpl::InvalidateRightsIdCache() {
         this->rights_id_cache.Invalidate();
+        return ResultSuccess();
+    }
+
+    Result ContentManagerImpl::GetMemoryReport(sf::Out<MemoryReport> out) {
+        /* Populate content meta resource states. */
+        MemoryReport report = {
+            .system_content_meta_resource_state = {
+                .peak_total_alloc_size = g_system_content_meta_memory_resource.GetPeakTotalAllocationSize(),
+                .peak_alloc_size       = g_system_content_meta_memory_resource.GetPeakAllocationSize(),
+                .allocatable_size      = g_system_content_meta_memory_resource.GetAllocator()->GetAllocatableSize(),
+                .total_free_size       = g_system_content_meta_memory_resource.GetAllocator()->GetTotalFreeSize(),
+            },
+            .sd_and_user_content_meta_resource_state {
+                .peak_total_alloc_size = g_sd_and_user_content_meta_memory_resource.GetPeakTotalAllocationSize(),
+                .peak_alloc_size       = g_sd_and_user_content_meta_memory_resource.GetPeakAllocationSize(),
+                .allocatable_size      = g_sd_and_user_content_meta_memory_resource.GetAllocator()->GetAllocatableSize(),
+                .total_free_size       = g_sd_and_user_content_meta_memory_resource.GetAllocator()->GetTotalFreeSize(),
+            },
+            .gamecard_content_meta_resource_state {
+                .peak_total_alloc_size = g_gamecard_content_meta_memory_resource.GetPeakTotalAllocationSize(),
+                .peak_alloc_size       = g_gamecard_content_meta_memory_resource.GetPeakAllocationSize(),
+                .allocatable_size      = g_gamecard_content_meta_memory_resource.GetAllocator()->GetAllocatableSize(),
+                .total_free_size       = g_gamecard_content_meta_memory_resource.GetAllocator()->GetTotalFreeSize(),
+            },
+            .heap_resource_state = {},
+        };
+
+        /* Populate heap memory resource state. */
+        GetHeapState().GetMemoryResourceState(std::addressof(report.heap_resource_state));
+
+        /* Output the report. */
+        out.SetValue(report);
         return ResultSuccess();
     }
 
