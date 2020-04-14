@@ -1,4 +1,27 @@
 # Changelog
+## 0.11.0
++ Support was added for 10.0.0.
+  + Exosphere has been updated to reflect the new key import semantics in 10.0.0.
+  + kernel_ldr now implements physical ASLR for the kernel's backing pages.
+  + Loader, NCM, and PM have been updated to reflect the changes Nintendo made in 10.0.0.
+  + Creport was updated to use the new `pgl` service to terminate processes instead of `ns:dev`.
++ A reimplementation of the `erpt` (error reports) system module was added.
+  + In previous versions of Atmosphere, a majority of error reports were prevented via a combination of custom creport, fatal, and stubbed eclct.
+  + However, error reports were still generated via some system actions.
+    + Most notably, any time the error applet appeared, an error report was generated.
+    + By default, atmosphere disabled the *uploading* of error reports, but going online in OFW after an error report occurred in Atmosphere could lead to undesirable telemetry.
+  + Atmosphere's `erpt` reimplementation allows the system to interact with existing error reports as expected.
+  + However, all new error reports are instead saved to the sd card (`/atmosphere/erpt_reports`), and are not committed to the system savegame.
+    + Users curious about what kind of telemetry is being prevented can view the reports as they're generated in there.
+    + Reports are saved as msgpack (as this is what Nintendo uses).
+  + Please note, not all telemetry is disabled. Play reports and System reports will continue to function unmodified.
+  + With atmosphere's `erpt` implementation, homebrew can now use the native error applet to display errors without worrying about generating undesirable telemetry.
++ libstratosphere and libvapours received a number of improvements.
+  + With thanks to @Adubbz for his work, the NCM namespace now has client code.
+    + This lays the groundwork for first-class system update/downgrade homebrew support in the near future.
+  + In particular, code implementing the os namespace is significantly more accurate.
+  + In addition, Nintendo's allocators were implemented, allowing for identical memory efficiency versus Nintendo's implementations.
++ General system stability improvements to enhance the user's experience.
 ## 0.10.5
 + Changes were made to the way fs.mitm builds images when providing a layeredfs romfs.
   + Building romfs metadata previously had a memory cost of about ~4-5x the file table size.
