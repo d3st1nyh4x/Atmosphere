@@ -13,14 +13,20 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#pragma once
 
-#define ATMOSPHERE_RELEASE_VERSION_MAJOR    0
-#define ATMOSPHERE_RELEASE_VERSION_MINOR    11
-#define ATMOSPHERE_RELEASE_VERSION_MICRO    1
+#ifndef EXOSPHERE_MC0_H
+#define EXOSPHERE_MC0_H
 
-#define ATMOSPHERE_RELEASE_VERSION ATMOSPHERE_RELEASE_VERSION_MAJOR, ATMOSPHERE_RELEASE_VERSION_MINOR, ATMOSPHERE_RELEASE_VERSION_MICRO
+#include <stdint.h>
+#include "memory_map.h"
 
-#define ATMOSPHERE_SUPPORTED_HOS_VERSION_MAJOR 10
-#define ATMOSPHERE_SUPPORTED_HOS_VERSION_MINOR 0
-#define ATMOSPHERE_SUPPORTED_HOS_VERSION_MICRO 0
+/* Exosphere driver for the Tegra X1 MC1. */
+
+static inline uintptr_t get_mc1_base(void) {
+    return MMIO_GET_DEVICE_ADDRESS(MMIO_DEVID_MC1);
+}
+
+#define MC1_BASE  (get_mc1_base())
+#define MAKE_MC1_REG(n) MAKE_REG32(MC1_BASE + n)
+
+#endif
